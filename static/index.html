@@ -523,7 +523,7 @@
   inset: 0;
   background: rgba(0,0,0,0.45);
   display: flex;
-  justify-content: center;
+  justify-content: center;git status
   align-items: center;
   z-index: 9999;
 }
@@ -1374,6 +1374,38 @@ function drawRouletteRecipe(){
       `;
     }
   }, 120);
+}
+
+function recipeMatchesSlot(recipe, slot){
+  const text = [
+    recipe.name || "",
+    recipe.kueche || "",
+    recipe.kategorie || "",
+    ...(recipe.tags || []),
+    ...(recipe.zutaten || [])
+  ].join(" ").toLowerCase();
+
+  if(slot.id === 1){
+    return (
+      text.includes("frühstück") ||
+      text.includes("pancake") ||
+      text.includes("waffel") ||
+      text.includes("bowl") ||
+      text.includes("bagel") ||
+      text.includes("brötchen") ||
+      text.includes("brot")
+    );
+  }
+
+  if(slot.id === 2){
+    return !text.includes("frühstück");
+  }
+
+  if(slot.id === 3){
+    return !text.includes("frühstück");
+  }
+
+  return true;
 }
 
   async function loadWeeklyPlan(){
