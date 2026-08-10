@@ -591,7 +591,7 @@
     <section class="hero" id="home">
       <div class="hero-badge">🍽️ Rezeptroulette</div>
       <h1>Was essen wir heute?</h1>
-      <p class="muted">Finde schnell ein Rezept, plane deine Woche oder rette Lebensmittel aus deinem Kühlschrank.</p>
+      <p class="muted">Finde schnell ein Rezept, entdecke neue Gerichte oder rette Lebensmittel aus deinem Kühlschrank.</p>
 
       <div class="hero-action-grid">
         <button class="hero-action primary" onclick="loadRoulette()">
@@ -845,12 +845,48 @@ function setWeekSlotFilter(slot){
           </div>
           ${recommended.length ? `<div class="clean-recipe-grid">${recommended.map(simpleRecipeCard).join("")}</div>` : `<div class="empty-state">Noch keine Rezepte geladen.</div>`}
         </section>
-        <section class="home-benefits">
-          <div>🌿 <strong>Einfach & schnell</strong><span>Für jeden Tag</span></div>
-          <div>❤️ <strong>Lieblingsrezepte</strong><span>Speichern & verwalten</span></div>
-          <div>📅 <strong>Planung leicht gemacht</strong><span>Deine Woche im Überblick</span></div>
-          <div>♻️ <strong>Lebensmittel retten</strong><span>Gut für dich & die Umwelt</span></div>
-        </section>
+       <section style="margin-top:44px;">
+  <div class="section-head">
+    <div>
+      <h2>🔥 Schnell etwas finden</h2>
+      <p class="muted">Wonach ist dir gerade?</p>
+    </div>
+  </div>
+
+  <div class="meal-filter-wrap">
+
+    <button class="meal-circle" onclick="openRecipeCategory('Frühstück')">
+      <div class="meal-icon">🌅</div>
+      <span>Frühstück</span>
+    </button>
+
+    <button class="meal-circle" onclick="openRecipeCategory('Nudeln')">
+      <div class="meal-icon">🍝</div>
+      <span>Nudeln</span>
+    </button>
+
+    <button class="meal-circle" onclick="openRecipeCategory('Vegetarisch')">
+      <div class="meal-icon">🥦</div>
+      <span>Veggie</span>
+    </button>
+
+    <button class="meal-circle" onclick="openRecipeCategory('Auflauf')">
+      <div class="meal-icon">🥘</div>
+      <span>Auflauf</span>
+    </button>
+
+    <button class="meal-circle" onclick="openRecipeCategory('Suppe')">
+      <div class="meal-icon">🍲</div>
+      <span>Suppe</span>
+    </button>
+
+    <button class="meal-circle" onclick="openRecipeCategory('Dessert')">
+      <div class="meal-icon">🍰</div>
+      <span>Dessert</span>
+    </button>
+
+  </div>
+</section>
       </div>`;
   }catch(error){
     c.innerHTML = "";
@@ -881,6 +917,30 @@ function setWeekSlotFilter(slot){
     }
 
     let selectedRecipeFilter = "Alle";
+async function openRecipeCategory(category){
+  await loadRecipes();
+
+  selectedRecipeFilter = category;
+  renderRecipes();
+
+  document.querySelectorAll(".meal-filter-panel .meal-circle").forEach(btn => {
+    btn.classList.remove("active");
+  });
+
+  const buttons = [...document.querySelectorAll(".meal-filter-panel .meal-circle")];
+
+  const matchingButton = buttons.find(btn => {
+    const text = btn.textContent.trim().toLowerCase();
+
+    if(category === "Vegetarisch") return text.includes("veggie");
+
+    return text.includes(category.toLowerCase());
+  });
+
+  if(matchingButton){
+    matchingButton.classList.add("active");
+  }
+}
 
 async function loadRecipes(){
   selectedRecipeFilter = "Alle";
