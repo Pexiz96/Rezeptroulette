@@ -474,10 +474,11 @@
     body.dark .top-nav{background:rgba(45,27,18,.88);border-color:rgba(255,255,255,.08)}
     body.dark .top-nav button{color:#fff7ed}
     body.dark .top-nav button.active{background:#3a2115;color:#ff9f1c}
-    body.dark .hero,body.dark .panel,body.dark .empty-state,body.dark .rescue-card,body.dark .detail,body.dark .card,body.dark .roulette-header,body.dark .roulette-result-card,body.dark .drawer-content{background:#24140d;color:#fff7ed}
+    body.dark .hero,body.dark .panel,body.dark .empty-state,body.dark .rescue-card,body.dark .detail,body.dark .card,body.dark .roulette-header,body.dark .roulette-result-card,body.dark .drawer-content,body.dark .modal-box{background:#24140d;color:#fff7ed}
     body.dark .meal-filter-panel{background:rgba(36,20,13,.62);border-color:rgba(255,255,255,.08)}
     body.dark .hero-badge,body.dark .badge{background:#3a2115;color:#ff9f1c}
     body.dark .secondary{background:#3a2115;color:#fff7ed;box-shadow:0 8px 24px rgba(0,0,0,.28)}
+    body.dark .modal-grid button{background:#3a2115;color:#fff7ed}
     body.dark .card-body{background:#24140d}
     body.dark .meta,body.dark .muted,body.dark .week-empty{color:#d8b49c}
     body.dark .home-benefits{border-top-color:rgba(255,255,255,.1)}
@@ -525,10 +526,6 @@
   justify-content: center;
   align-items: center;
   z-index: 9999;
-}
-
-.hidden {
-  display: none;
 }
 
 .modal-box {
@@ -700,15 +697,25 @@ function setWeekSlotFilter(slot){
 
     function renderIngredientBlock(ingredient){
       const alternatives = getIngredientAlternatives(ingredient);
+      const safeIngredient = escapeHtml(ingredient);
       return `
         <div class="ingredient ingredient-builder">
-          <div class="ingredient-main">✓ ${ingredient}</div>
+          <div class="ingredient-main">✓ ${safeIngredient}</div>
           ${alternatives.length ? `
             <div class="ingredient-alt-box">
               <span>Alternativen:</span>
-              ${alternatives.map(alt => `<button class="alt-btn" onclick="event.stopPropagation(); showToast('${ingredient} → ${alt}')">${alt}</button>`).join("")}
+              ${alternatives.map(alt => {
+                const safeAlt = escapeHtml(alt);
+                return `<button class="alt-btn" type="button" data-ingredient="${safeIngredient}" data-alternative="${safeAlt}" onclick="showIngredientAlternative(this)">${safeAlt}</button>`;
+              }).join("")}
             </div>` : ""}
         </div>`;
+    }
+
+    function showIngredientAlternative(button){
+      const ingredient = button.dataset.ingredient || "";
+      const alternative = button.dataset.alternative || "";
+      showToast(`${ingredient} → ${alternative}`);
     }
 
     function cleanRecipeText(text){
@@ -765,7 +772,6 @@ function setWeekSlotFilter(slot){
     function showHome(){
       setActiveNav("home");
       document.getElementById("home").classList.remove("hidden");
-      updateStats();
       renderHomeSections();
       window.scrollTo({top:0,behavior:"smooth"});
     }
@@ -807,15 +813,12 @@ function setWeekSlotFilter(slot){
           if(!response.ok) throw new Error("Serverfehler");
           allRecipes = await response.json();
         }
-        updateStats();
-        return allRecipes;
+          return allRecipes;
       }catch(error){
         document.getElementById("content").innerHTML = `<div class="error-box">❌ Rezepte konnten nicht geladen werden.<br><br>Bitte später erneut versuchen.</div>`;
         throw error;
       }
     }
-
-    function updateStats(){}
 
     async function renderHomeSections(){
     const c = document.getElementById("content");
@@ -903,116 +906,54 @@ function setWeekSlotFilter(slot){
   }
 }
 
-  function simpleRecipeCard(recipe){
-    const img = imageUrl(recipe);
+    function simpleRecipeCard(recipe){
+      const img = imageUrl(recipe);
+      const safeName = escapeHtml(cleanRecipeText(recipe.name));
+      const safeDifficulty = escapeHtml(recipe.schwierigkeit || "Einfach");
+      const safeTime = escapeHtml(recipe.kochzeit || "?");
+      const safeImg = escapeHtml(img);
+      const id = Number(recipe.id);
 
-    const safeName = escapeHtml(cleanRecipeText(recipe.name));
-    const safeDifficulty = escapeHtml(recipe.schwierigkeit || "Einfach");
-    const safeTime = escapeHtml(recipe.kochzeit || "?");
-    const safeImg = escapeHtml(img);
-
-    return `
-      <div class="card" onclick="showRecipe(${Number(recipe.id)})">
-
-        ${img
-          ? `<img src="${safeImg}" alt="${safeName}">`
-          : `<div class="placeholder">Kein Bild</div>`
-        }
-
-        <div class="card-body">
-
-         <h3>${safeName}</h3>
-
-          <div class="meta">
-            ⏱️ ${safeTime} Min · 🔥 ${safeDifficulty}
+      return `
+        <div class="card" onclick="showRecipe(${id})">
+          ${img ? `<img src="${safeImg}" alt="${safeName}">` : `<div class="placeholder">Kein Bild</div>`}
+          <div class="card-body">
+            <h3>${safeName}</h3>
+            <div class="meta">⏱️ ${safeTime} Min · 🔥 ${safeDifficulty}</div>
+            <button class="primary full-btn" onclick="event.stopPropagation(); showRecipe(${id})">Öffnen</button>
           </div>
-
-         <button
-           class="primary full-btn"
-            onclick="event.stopPropagation(); showRecipe(${Number(recipe.id)})"
-          >
-            Öffnen
-         </button>
-
-      </div>
-    </div>
-  `;
-}
+        </div>`;
+    }
 
     function recipeCard(recipe){
-  const img = imageUrl(recipe);
+      const img = imageUrl(recipe);
+      const id = Number(recipe.id);
+      const safeName = escapeHtml(cleanRecipeText(recipe.name));
+      const safeKitchen = escapeHtml(recipe.kueche || "");
+      const safeDifficulty = escapeHtml(recipe.schwierigkeit || "Einfach");
+      const safeTime = escapeHtml(recipe.kochzeit || "?");
+      const safeImg = escapeHtml(img);
+      const showKitchen = recipe.kueche && recipe.kueche !== "PDF Import" && recipe.kueche !== "Link Import";
 
-  const safeName = escapeHtml(cleanRecipeText(recipe.name));
-  const safeKitchen = escapeHtml(recipe.kueche || "");
-  const safeDifficulty = escapeHtml(recipe.schwierigkeit || "Einfach");
-  const safeTime = escapeHtml(recipe.kochzeit || "?");
-  const safeImg = escapeHtml(img);
+      return `
+        <div class="card" onclick="showRecipe(${id})">
+          ${img ? `<img src="${safeImg}" alt="${safeName}">` : `<div class="placeholder">Kein Bild</div>`}
+          <div class="favorite-row">
+            <button class="favorite-btn" onclick="event.stopPropagation(); toggleFavorite(${id})">${isFavorite(id) ? "❤️" : "🤍"}</button>
+          </div>
+          <div class="card-body">
+            <h3>${safeName}</h3>
+            <div class="meta">${showKitchen ? `${safeKitchen} · ` : ""}${safeTime} Min · ${safeDifficulty}</div>
+            <div class="card-actions clean-actions">
+              <button class="primary" onclick="event.stopPropagation(); showRecipe(${id})">Rezept öffnen</button>
+              <button class="secondary" onclick="event.stopPropagation(); quickAddToPlan(${id})">📅 Planen</button>
+              ${recipe.kueche === "Link Import" ? `<button class="secondary" onclick="event.stopPropagation(); deleteRecipe(${id})">🗑️ Löschen</button>` : ""}
+            </div>
+          </div>
+        </div>`;
+    }
 
-  const showKitchen =
-    recipe.kueche &&
-    recipe.kueche !== "PDF Import" &&
-    recipe.kueche !== "Link Import";
-
-  return `
-    <div class="card" onclick="showRecipe(${Number(recipe.id)})">
-
-      ${img
-        ? `<img src="${safeImg}" alt="${safeName}">`
-        : `<div class="placeholder">Kein Bild</div>`
-      }
-
-      <div class="favorite-row">
-        <button
-          class="favorite-btn"
-          onclick="event.stopPropagation(); toggleFavorite(${Number(recipe.id)})"
-        >
-          ${isFavorite(recipe.id) ? "❤️" : "🤍"}
-        </button>
-      </div>
-
-      <div class="card-body">
-
-        <h3>${safeName}</h3>
-
-        <div class="meta">
-          ${showKitchen ? `${safeKitchen} · ` : ""}
-          ${safeTime} Min · ${safeDifficulty}
-        </div>
-
-        <div class="card-actions clean-actions">
-
-          <button
-            class="primary"
-            onclick="event.stopPropagation(); showRecipe(${Number(recipe.id)})"
-          >
-            Rezept öffnen
-          </button>
-
-          <button
-            class="secondary"
-            onclick="event.stopPropagation(); quickAddToPlan(${Number(recipe.id)})"
-          >
-            📅 Planen
-          </button>
-
-          ${recipe.kueche === "Link Import"
-            ? `
-              <button
-                class="secondary"
-                onclick="event.stopPropagation(); deleteRecipe(${Number(recipe.id)})"
-              >
-                🗑️ Löschen
-              </button>
-            `
-            : ""
-          }
-
-        </div>
-
-      </div>
-    </div>
-  `;
-}
+    let selectedRecipeFilter = "Alle";
 async function openRecipeCategory(category){
   await loadRecipes();
 
@@ -1181,46 +1122,68 @@ function formatSteps(anleitung){
     .split(/\n|(?=\d+\.\s)/)
     .map(s => s.trim())
     .filter(Boolean)
-    .map(s => `<div class="step">${s}</div>`)
+    .map(s => `<div class="step">${escapeHtml(s)}</div>`)
     .join("");
 }
 
 
     async function showRecipe(id){
-      if(document.querySelector('[data-nav="favorites"].active')){
-         previousView = "favorites";
-      }else if(document.querySelector('[data-nav="recent"].active')){
-         previousView = "recent";
-      }else if(document.querySelector('[data-nav="rescue"].active')){
-         previousView = "rescue";
-      }else if(document.querySelector('[data-nav="plan"].active')){
-         previousView = "plan";
-      }else{
-         previousView = "recipes";
-}
+      const activeNav = document.querySelector(".top-nav button.active")?.dataset.nav;
+      if(activeNav && activeNav !== "home") previousView = activeNav;
+
       recipeScrollPosition = window.scrollY;
       hideHome();
       await ensureRecipesLoaded();
+
       const recipe = allRecipes.find(r => Number(r.id) === Number(id));
-      if(!recipe) return;
+      if(!recipe){
+        showToast("Rezept nicht gefunden.");
+        return;
+      }
+
       saveRecentRecipe(recipe);
       const img = imageUrl(recipe);
+      const safeImg = escapeHtml(img);
+      const safeName = escapeHtml(cleanRecipeText(recipe.name));
+      const safeKitchen = escapeHtml(recipe.kueche || "Unbekannt");
+      const safePortions = escapeHtml(recipe.portionen || "?");
+      const safeTime = escapeHtml(recipe.kochzeit || "?");
+      const safeDifficulty = escapeHtml(recipe.schwierigkeit || "Einfach");
+      const safeTags = (recipe.tags || []).map(tag => `<div class="chip">${escapeHtml(tag)}</div>`).join("");
+
       document.getElementById("content").innerHTML = `
         <button class="secondary" onclick="goBackFromRecipe()">← Zurück</button>
         <div class="detail">
-          ${img ? `<img src="${img}" alt="${cleanRecipeText(recipe.name)}">` : `<div class="placeholder">Kein Bild</div>`}
+          ${img ? `<img src="${safeImg}" alt="${safeName}">` : `<div class="placeholder">Kein Bild</div>`}
           <div class="detail-body">
-            <h1>${cleanRecipeText(recipe.name)}</h1>
-            ${(recipe.tags || []).length ? `<div class="chips">${recipe.tags.map(tag => `<div class="chip">${tag}</div>`).join("")}</div>` : ""}
+            <h1>${safeName}</h1>
+            ${safeTags ? `<div class="chips">${safeTags}</div>` : ""}
             ${ratingStars(recipe.id)}
-            <div class="meta"><span>🌍 ${recipe.kueche || "Unbekannt"}</span><span>🍽️ ${recipe.portionen || "?"} Portionen</span><span>⏱️ ${recipe.kochzeit || "?"} Min</span><span>🔥 ${recipe.schwierigkeit || "Einfach"}</span></div>
-            <div class="buttons"><button class="primary" onclick="startCookMode(${recipe.id})">👨‍🍳 Kochmodus</button><button class="secondary" onclick="quickAddToPlan(${recipe.id})">📅 Einplanen</button><button class="secondary" onclick="shareRecipe(${recipe.id})">📤 Teilen</button></div>
-            <div class="columns"><div><h2>Zutaten</h2><div class="ingredients">${(recipe.zutaten || []).map(renderIngredientBlock).join("")}</div></div><div><h2>Anleitung</h2><div class="steps">
-  ${formatSteps(recipe.anleitung || "Keine Anleitung vorhanden.")}
-</div></div></div>
+            <div class="meta">
+              <span>🌍 ${safeKitchen}</span>
+              <span>🍽️ ${safePortions} Portionen</span>
+              <span>⏱️ ${safeTime} Min</span>
+              <span>🔥 ${safeDifficulty}</span>
+            </div>
+            <div class="buttons">
+              <button class="primary" onclick="startCookMode(${Number(recipe.id)})">👨‍🍳 Kochmodus</button>
+              <button class="secondary" onclick="quickAddToPlan(${Number(recipe.id)})">📅 Einplanen</button>
+              <button class="secondary" onclick="shareRecipe(${Number(recipe.id)})">📤 Teilen</button>
+            </div>
+            <div class="columns">
+              <div>
+                <h2>Zutaten</h2>
+                <div class="ingredients">${(recipe.zutaten || []).map(renderIngredientBlock).join("")}</div>
+              </div>
+              <div>
+                <h2>Anleitung</h2>
+                <div class="steps">${formatSteps(recipe.anleitung || "Keine Anleitung vorhanden.")}</div>
+              </div>
+            </div>
           </div>
         </div>`;
-      window.scrollTo({top:0,behavior:"smooth"});
+
+      window.scrollTo({top:0, behavior:"smooth"});
     }
 
   function toggleRouletteFilters(){
@@ -1361,11 +1324,11 @@ function drawRouletteRecipe(){
     result.innerHTML = `
       <div class="roulette-result-card">
         <div class="roulette-image-wrap">
-          ${tempImg ? `<img src="${tempImg}" alt="${cleanRecipeText(tempRecipe.name)}">` : `<div class="placeholder">Kein Bild</div>`}
+          ${tempImg ? `<img src="${escapeHtml(tempImg)}" alt="${escapeHtml(cleanRecipeText(tempRecipe.name))}">` : `<div class="placeholder">Kein Bild</div>`}
         </div>
         <div class="roulette-result-body">
           <span class="badge">🎰 Dreht...</span>
-          <h2>${cleanRecipeText(tempRecipe.name)}</h2>
+          <h2>${escapeHtml(cleanRecipeText(tempRecipe.name))}</h2>
         </div>
       </div>
     `;
@@ -1385,16 +1348,16 @@ function drawRouletteRecipe(){
       result.innerHTML = `
         <div class="roulette-result-card">
           <div class="roulette-image-wrap">
-            ${img ? `<img src="${img}" alt="${cleanRecipeText(winner.name)}">` : `<div class="placeholder">Kein Bild</div>`}
+            ${img ? `<img src="${escapeHtml(img)}" alt="${escapeHtml(cleanRecipeText(winner.name))}">` : `<div class="placeholder">Kein Bild</div>`}
           </div>
 
           <div class="roulette-result-body">
             <span class="badge">🎉 Dein Treffer</span>
-            <h2>${cleanRecipeText(winner.name)}</h2>
+            <h2>${escapeHtml(cleanRecipeText(winner.name))}</h2>
 
             <div class="meta">
               <span>⏱️ ${winner.kochzeit || "?"} Min</span>
-              <span>🔥 ${winner.schwierigkeit || "Einfach"}</span>
+              <span>🔥 ${escapeHtml(winner.schwierigkeit || "Einfach")}</span>
             </div>
 
             <div class="buttons">
@@ -1410,97 +1373,97 @@ function drawRouletteRecipe(){
 }
 
   async function loadWeeklyPlan(){
-  setActiveNav("plan");
-  hideHome();
+    setActiveNav("plan");
+    hideHome();
 
-  const c = document.getElementById("content");
-  await ensureRecipesLoaded();
+    const c = document.getElementById("content");
+    showSkeleton(c);
 
-  const response = await fetch(`/wochenplan?t=${Date.now()}`, {
-  cache: "no-store"
-});
+    try{
+      await ensureRecipesLoaded();
 
-if(!response.ok){
-  throw new Error(`Wochenplan konnte nicht geladen werden (${response.status})`);
-}
+      const response = await fetch(`/wochenplan?t=${Date.now()}`, {cache: "no-store"});
+      if(!response.ok){
+        throw new Error(`Wochenplan konnte nicht geladen werden (${response.status})`);
+      }
 
-const plan = await response.json();
+      const plan = await response.json();
+      const days = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"];
+      const slots = [
+        {id: 1, name: "Frühstück"},
+        {id: 2, name: "Mittag"},
+        {id: 3, name: "Abend"}
+      ];
 
-  const days = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"];
-  const slots = [
-    {id: 1, name: "Frühstück"},
-    {id: 2, name: "Mittag"},
-    {id: 3, name: "Abend"}
-  ];
+      c.innerHTML = `
+        <button class="secondary" onclick="showHome()">← Zurück</button>
+        <h2>📅 Wochenplan</h2>
 
-  c.innerHTML = `
-    <button class="secondary" onclick="showHome()">← Zurück</button>
-    <h2>📅 Wochenplan</h2>
-
-    <div class="buttons">
-      <button class="primary" type="button" onclick="autoFillWeek()">✨ Woche automatisch planen</button>
-      <button class="secondary" type="button" onclick="resetWeek()">🗑️ Woche leeren</button>
-    </div>
-    <div class="buttons" style="margin-top:14px;">
-  <button class="secondary" onclick="setWeekSlotFilter('Alle')">🍽️ Alle</button>
-
-  <button class="secondary" onclick="setWeekSlotFilter('Frühstück')">
-    🌅 Frühstück
-  </button>
-
-  <button class="secondary" onclick="setWeekSlotFilter('Mittag')">
-    ☀️ Mittag
-  </button>
-
-  <button class="secondary" onclick="setWeekSlotFilter('Abend')">
-    🌙 Abendessen
-  </button>
-</div>
-
-    <div class="grid">
-      ${days.map(day => `
-        <div class="card">
-          <div class="card-body">
-            <h3>📅 ${day}</h3>
-
-            ${slots
-  .filter(slot =>
-    selectedWeekSlotFilter === "Alle" ||
-    slot.name === selectedWeekSlotFilter
-  )
-  .map(slot => {
-              const recipeId = plan?.[day]?.[slot.id] ?? plan?.[day]?.[String(slot.id)] ?? null;
-              const recipe = allRecipes.find(r => Number(r.id) === Number(recipeId));
-
-              return `
-                <div style="margin:14px 0;padding:14px;border-radius:18px;background:var(--cream);">
-                  <strong>${slot.name}</strong>
-
-                  ${recipe ? `
-                    ${imageUrl(recipe) ? `<img class="week-image" src="${imageUrl(recipe)}" alt="${cleanRecipeText(recipe.name)}">` : ""}
-                    <p class="week-title">${cleanRecipeText(recipe.name)}</p>
-
-                    <div class="card-actions">
-                      <button class="primary" type="button" onclick="event.stopPropagation(); showRecipe(${recipe.id})">Öffnen</button>
-                      <button class="secondary" type="button" onclick="event.stopPropagation(); clearDaySlot('${day}', ${slot.id})">❌ Entfernen</button>
-                    </div>
-                  ` : `<p class="week-empty">Noch kein Rezept gewählt</p>`}
-
-                  <select onclick="event.stopPropagation()" onchange="setDayRecipeSlot('${day}', ${slot.id}, this.value)">
-                    <option value="">Rezept auswählen</option>
-                    ${allRecipes
-  .filter(r => recipeMatchesSlot(r, slot))
-  .map(r => `<option value="${r.id}">${cleanRecipeText(r.name)}</option>`)
-  .join("")}                  </select>
-                </div>
-              `;
-            }).join("")}
-          </div>
+        <div class="buttons">
+          <button class="primary" type="button" onclick="autoFillWeek()">✨ Woche automatisch planen</button>
+          <button class="secondary" type="button" onclick="resetWeek()">🗑️ Woche leeren</button>
         </div>
-      `).join("")}
-    </div>
-  `;
-}
+
+        <div class="buttons" style="margin-top:14px;">
+          <button class="secondary" onclick="setWeekSlotFilter('Alle')">🍽️ Alle</button>
+          <button class="secondary" onclick="setWeekSlotFilter('Frühstück')">🌅 Frühstück</button>
+          <button class="secondary" onclick="setWeekSlotFilter('Mittag')">☀️ Mittag</button>
+          <button class="secondary" onclick="setWeekSlotFilter('Abend')">🌙 Abendessen</button>
+        </div>
+
+        <div class="grid">
+          ${days.map(day => `
+            <div class="card">
+              <div class="card-body">
+                <h3>📅 ${day}</h3>
+                ${slots
+                  .filter(slot => selectedWeekSlotFilter === "Alle" || slot.name === selectedWeekSlotFilter)
+                  .map(slot => {
+                    const recipeId = plan?.[day]?.[slot.id] ?? plan?.[day]?.[String(slot.id)] ?? null;
+                    const recipe = allRecipes.find(r => Number(r.id) === Number(recipeId));
+
+                    if(recipe){
+                      const safeName = escapeHtml(cleanRecipeText(recipe.name));
+                      const img = imageUrl(recipe);
+                      const safeImg = escapeHtml(img);
+
+                      return `
+                        <div style="margin:14px 0;padding:14px;border-radius:18px;background:var(--cream);">
+                          <strong>${slot.name}</strong>
+                          ${img ? `<img class="week-image" src="${safeImg}" alt="${safeName}">` : ""}
+                          <p class="week-title">${safeName}</p>
+                          <div class="card-actions">
+                            <button class="primary" type="button" onclick="event.stopPropagation(); showRecipe(${Number(recipe.id)})">Öffnen</button>
+                            <button class="secondary" type="button" onclick="event.stopPropagation(); clearDaySlot('${day}', ${slot.id})">❌ Entfernen</button>
+                          </div>
+                          <select onclick="event.stopPropagation()" onchange="setDayRecipeSlot('${day}', ${slot.id}, this.value)">
+                            <option value="">Rezept ersetzen</option>
+                            ${allRecipes.filter(r => recipeMatchesSlot(r, slot)).map(r => `<option value="${Number(r.id)}">${escapeHtml(cleanRecipeText(r.name))}</option>`).join("")}
+                          </select>
+                        </div>`;
+                    }
+
+                    return `
+                      <div style="margin:14px 0;padding:14px;border-radius:18px;background:var(--cream);">
+                        <strong>${slot.name}</strong>
+                        <p class="week-empty">Noch kein Rezept gewählt</p>
+                        <select onclick="event.stopPropagation()" onchange="setDayRecipeSlot('${day}', ${slot.id}, this.value)">
+                          <option value="">Rezept auswählen</option>
+                          ${allRecipes.filter(r => recipeMatchesSlot(r, slot)).map(r => `<option value="${Number(r.id)}">${escapeHtml(cleanRecipeText(r.name))}</option>`).join("")}
+                        </select>
+                      </div>`;
+                  }).join("")}
+              </div>
+            </div>`).join("")}
+        </div>`;
+
+    }catch(error){
+      console.error("Wochenplan laden fehlgeschlagen:", error);
+      c.innerHTML = `
+        <button class="secondary" onclick="showHome()">← Zurück</button>
+        <div class="error-box">❌ Wochenplan konnte nicht geladen werden. Bitte Seite neu laden oder später erneut versuchen.</div>`;
+    }
+  }
 
 async function setDayRecipeSlot(day, slot, id){
   if(!id) return;
@@ -1525,14 +1488,22 @@ async function setDayRecipeSlot(day, slot, id){
     showToast("Rezept konnte nicht eingeplant werden.");
   }
 }
+async function clearDaySlot(day, slot){
+  const ok = confirm(`${day}: Diesen Eintrag wirklich entfernen?`);
+  if(!ok) return;
 
-     async function clearDaySlot(day, slot){
-  const response = await fetch(`/wochenplan/${encodeURIComponent(day)}/${slot}/0`, {
-    method: "POST"
-  });
+  try{
+    const response = await fetch(`/wochenplan/${encodeURIComponent(day)}/${Number(slot)}/0`, {method: "POST"});
+    if(!response.ok){
+      throw new Error(`Entfernen fehlgeschlagen (${response.status})`);
+    }
 
-  showToast(response.ok ? "Slot entfernt" : "Fehler beim Entfernen");
-  await loadWeeklyPlan();
+    showToast("Eintrag entfernt!");
+    await loadWeeklyPlan();
+  }catch(error){
+    console.error("Fehler beim Entfernen:", error);
+    showToast("Eintrag konnte nicht entfernt werden.");
+  }
 }
 async function autoFillWeek(){
   showToast("Woche wird geplant...");
@@ -1540,16 +1511,7 @@ async function autoFillWeek(){
   try{
     await ensureRecipesLoaded();
 
-    const days = [
-      "Montag",
-      "Dienstag",
-      "Mittwoch",
-      "Donnerstag",
-      "Freitag",
-      "Samstag",
-      "Sonntag"
-    ];
-
+    const days = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"];
     const slots = [
       {id: 1, name: "Frühstück"},
       {id: 2, name: "Mittag"},
@@ -1557,91 +1519,42 @@ async function autoFillWeek(){
     ];
 
     const usedIds = new Set();
-    const requests = [];
+    const entries = [];
 
     for(const day of days){
       for(const slot of slots){
+        const pool = allRecipes.filter(recipe => recipeMatchesSlot(recipe, slot));
+        if(!pool.length) continue;
 
-        const pool = allRecipes.filter(recipe =>
-          recipeMatchesSlot(recipe, slot)
-        );
-
-        if(!pool.length){
-          continue;
-        }
-
-        const available = pool.filter(recipe =>
-          !usedIds.has(Number(recipe.id))
-        );
-
-        const finalPool = available.length
-          ? available
-          : pool;
-
-        const recipe =
-          finalPool[Math.floor(Math.random() * finalPool.length)];
-
-        if(!recipe){
-          continue;
-        }
+        const available = pool.filter(recipe => !usedIds.has(Number(recipe.id)));
+        const finalPool = available.length ? available : pool;
+        const recipe = finalPool[Math.floor(Math.random() * finalPool.length)];
+        if(!recipe) continue;
 
         usedIds.add(Number(recipe.id));
-
-        requests.push({
-          day,
-          slot,
-          recipe
-        });
+        entries.push({day, slot: slot.id, recipe_id: Number(recipe.id)});
       }
     }
 
-    let successCount = 0;
-    let errorCount = 0;
-
-    for(const item of requests){
-      try{
-        const response = await fetch(
-          `/wochenplan/${encodeURIComponent(item.day)}/${item.slot.id}/${Number(item.recipe.id)}`,
-          {
-            method: "POST"
-          }
-        );
-
-        if(response.ok){
-          successCount++;
-        }else{
-          errorCount++;
-          console.error(
-            "Fehler beim Planen:",
-            item.day,
-            item.slot.name,
-            response.status
-          );
-        }
-
-      }catch(error){
-        errorCount++;
-        console.error(
-          "Netzwerkfehler beim Planen:",
-          item.day,
-          item.slot.name,
-          error
-        );
-      }
+    if(!entries.length){
+      showToast("Keine passenden Rezepte für die Planung gefunden.");
+      return;
     }
 
+    const response = await fetch("/wochenplan/bulk", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({entries})
+    });
+
+    if(!response.ok){
+      throw new Error(`Automatische Planung fehlgeschlagen (${response.status})`);
+    }
+
+    showToast("Woche automatisch geplant!");
     await loadWeeklyPlan();
-
-    if(errorCount === 0){
-      showToast("Woche automatisch geplant!");
-    }else{
-      showToast(
-        `${successCount} Einträge gespeichert, ${errorCount} fehlgeschlagen.`
-      );
-    }
-
   }catch(error){
-    console.error(error);
+    console.error("Automatische Planung fehlgeschlagen:", error);
     showToast("Automatische Planung fehlgeschlagen.");
   }
 }
@@ -1685,78 +1598,73 @@ async function loadShoppingList(){
   hideHome();
 
   const c = document.getElementById("content");
+  showSkeleton(c);
 
-  const response = await fetch(`/einkaufsliste?t=${Date.now()}`, {
-    cache: "no-store"
-  });
-
-  const data = await response.json();
-  const categories = data.categories || {};
-
-  const atHome = JSON.parse(localStorage.getItem("atHomeIngredients") || "[]")
-    .map(x => x.toLowerCase().trim())
-    .filter(Boolean);
-
-  const filteredCategories = {};
-
-  Object.entries(categories).forEach(([category, items]) => {
-    const filteredItems = items.filter(item => {
-  const itemName = normalizeFoodName(item);
-
-  return !atHome.some(homeItem => {
-    const homeName = normalizeFoodName(homeItem);
-
-    if(!homeName) return false;
-
-    return itemName === homeName;
-  });
-});
-
-    if(filteredItems.length){
-      filteredCategories[category] = filteredItems;
+  try{
+    const response = await fetch(`/einkaufsliste?t=${Date.now()}`, {cache: "no-store"});
+    if(!response.ok){
+      throw new Error(`Einkaufsliste konnte nicht geladen werden (${response.status})`);
     }
-  });
 
-  const hasItems = Object.keys(filteredCategories).length > 0;
+    const data = await response.json();
+    const categories = data.categories || {};
+    const atHome = JSON.parse(localStorage.getItem("atHomeIngredients") || "[]")
+      .map(x => String(x).trim())
+      .filter(Boolean);
 
-  c.innerHTML = `
-    <button class="secondary" onclick="showHome()">← Zurück</button>
-    <h2>🛒 Einkaufsliste</h2>
+    const filteredCategories = {};
 
-    <div class="panel" style="margin:18px 0;display:grid;gap:12px;">
-      <h3>🏠 Habe ich zuhause</h3>
-      <p class="muted">Trage Zutaten ein, die nicht auf die Einkaufsliste sollen.</p>
-      <textarea id="atHomeInput" placeholder="Milch&#10;Mehl&#10;Eier">${atHome.join("\n")}</textarea>
-      <button class="primary" onclick="saveAtHomeIngredients()">Liste neu berechnen</button>
-    </div>
+    Object.entries(categories).forEach(([category, items]) => {
+      const filteredItems = (items || []).filter(item => {
+        const itemName = normalizeFoodName(item);
+        return !atHome.some(homeItem => {
+          const homeName = normalizeFoodName(homeItem);
+          return homeName && itemName === homeName;
+        });
+      });
 
-    <button class="secondary" onclick="copyShoppingList()">Liste kopieren</button>
+      if(filteredItems.length) filteredCategories[category] = filteredItems;
+    });
 
-    ${hasItems ? `
-      <div class="shopping-list">
-        ${Object.entries(filteredCategories).map(([category, items]) => `
-          <div class="panel" style="margin-top:18px;">
-            <h3>${category}</h3>
+    const hasItems = Object.keys(filteredCategories).length > 0;
 
-            <div class="shopping-list">
-              ${items.map(i => `
-                <label class="shopping-item">
-                  <input type="checkbox">
-                  <span class="shopping-item-text">${i}</span>
-                </label>
-              `).join("")}
-            </div>
-          </div>
-        `).join("")}
+    c.innerHTML = `
+      <button class="secondary" onclick="showHome()">← Zurück</button>
+      <h2>🛒 Einkaufsliste</h2>
+
+      <div class="panel" style="margin:18px 0;display:grid;gap:12px;">
+        <h3>🏠 Habe ich zuhause</h3>
+        <p class="muted">Trage Zutaten ein, die nicht auf die Einkaufsliste sollen.</p>
+        <textarea id="atHomeInput" placeholder="Milch&#10;Mehl&#10;Eier">${escapeHtml(atHome.join("\n"))}</textarea>
+        <button class="primary" onclick="saveAtHomeIngredients()">Liste neu berechnen</button>
       </div>
-    ` : `
-      <div class="empty-state">
-        <h2>🛒 Nichts einzukaufen</h2>
-        <p>Entweder ist dein Wochenplan leer oder du hast alle Zutaten bereits zuhause.</p>
-        <button class="primary" onclick="loadWeeklyPlan()">Zum Wochenplan</button>
-      </div>
-    `}
-  `;
+
+      <button class="secondary" onclick="copyShoppingList()">Liste kopieren</button>
+
+      ${hasItems ? `
+        <div class="shopping-list">
+          ${Object.entries(filteredCategories).map(([category, items]) => `
+            <div class="panel" style="margin-top:18px;">
+              <h3>${escapeHtml(category)}</h3>
+              <div class="shopping-list">
+                ${items.map(i => `
+                  <label class="shopping-item">
+                    <input type="checkbox">
+                    <span class="shopping-item-text">${escapeHtml(i)}</span>
+                  </label>`).join("")}
+              </div>
+            </div>`).join("")}
+        </div>` : `
+        <div class="empty-state">
+          <h2>🛒 Nichts einzukaufen</h2>
+          <p>Entweder ist dein Wochenplan leer oder du hast alle Zutaten bereits zuhause.</p>
+          <button class="primary" onclick="loadWeeklyPlan()">Zum Wochenplan</button>
+        </div>`}
+    `;
+  }catch(error){
+    console.error("Einkaufsliste laden fehlgeschlagen:", error);
+    c.innerHTML = `<button class="secondary" onclick="showHome()">← Zurück</button><div class="error-box">❌ Einkaufsliste konnte nicht geladen werden.</div>`;
+  }
 }
 
 function saveAtHomeIngredients(){const value=document.getElementById("atHomeInput")?.value||"";const items=value.split(/\n|,|;/).map(x=>x.trim()).filter(Boolean);localStorage.setItem("atHomeIngredients",JSON.stringify(items));showToast("Vorhandene Zutaten gespeichert!");loadShoppingList()}
@@ -1778,7 +1686,7 @@ function copyShoppingList(){
 }
 
 
-    function loadFoodRescue(){setActiveNav("rescue");hideHome();document.getElementById("content").innerHTML=`<button class="secondary" onclick="showHome()">← Zurück</button><div class="panel" style="display:grid;gap:16px;margin-top:20px;"><div><span class="hero-badge">♻️ Food Rescue</span><h1>Was hast du noch zuhause?</h1><p class="muted">Gib Lebensmittel ein, die du verwerten möchtest. Die App sucht passende Rezepte.</p></div><textarea id="rescueInput" placeholder="Zum Beispiel:&#10;Sahne&#10;Paprika&#10;Reis&#10;Eier&#10;Käse">${pantry.join("\n")}</textarea><div class="buttons"><button class="primary" onclick="findRescueRecipes()">Lebensmittel retten</button><button class="secondary" onclick="savePantry()">Vorrat speichern</button></div></div><div id="rescueResults" style="margin-top:28px;"></div>`}
+    function loadFoodRescue(){setActiveNav("rescue");hideHome();document.getElementById("content").innerHTML=`<button class="secondary" onclick="showHome()">← Zurück</button><div class="panel" style="display:grid;gap:16px;margin-top:20px;"><div><span class="hero-badge">♻️ Food Rescue</span><h1>Was hast du noch zuhause?</h1><p class="muted">Gib Lebensmittel ein, die du verwerten möchtest. Die App sucht passende Rezepte.</p></div><textarea id="rescueInput" placeholder="Zum Beispiel:&#10;Sahne&#10;Paprika&#10;Reis&#10;Eier&#10;Käse">${escapeHtml(pantry.join("\n"))}</textarea><div class="buttons"><button class="primary" onclick="findRescueRecipes()">Lebensmittel retten</button><button class="secondary" onclick="savePantry()">Vorrat speichern</button></div></div><div id="rescueResults" style="margin-top:28px;"></div>`}
     function savePantry(){pantry=document.getElementById("rescueInput").value.split(/\n|,|;/).map(x=>x.trim()).filter(Boolean);localStorage.setItem("pantry",JSON.stringify(pantry));showToast("Vorrat gespeichert!")}
 
     async function findRescueRecipes(){
@@ -1940,21 +1848,18 @@ function rescueIdeaCard(idea){
   return `
     <div class="card">
       <div class="card-body">
-        <h3>${idea.icon} ${idea.name}</h3>
+        <h3>${escapeHtml(idea.icon)} ${escapeHtml(idea.name)}</h3>
         <div class="meta">Aus deinen Zutaten erstellt</div>
-
         <h4>Zutaten-Idee</h4>
         <div class="ingredients">
-          ${idea.ingredients.map(i => `<div class="ingredient">✓ ${i}</div>`).join("")}
+          ${(idea.ingredients || []).map(i => `<div class="ingredient">✓ ${escapeHtml(i)}</div>`).join("")}
         </div>
-
         <h4 style="margin-top:18px;">Anleitung</h4>
         <div class="steps">
-          ${idea.steps.map((s, i) => `<div class="step">${i + 1}. ${s}</div>`).join("")}
+          ${(idea.steps || []).map((s, i) => `<div class="step">${i + 1}. ${escapeHtml(s)}</div>`).join("")}
         </div>
       </div>
-    </div>
-  `;
+    </div>`;
 }
   let selectedRecipeId = null;
   let selectedDay = null;
@@ -1978,21 +1883,23 @@ function rescueIdeaCard(idea){
 }
 
   async function selectPlanSlot(slot){
-  if(!selectedRecipeId) return showToast("Kein Rezept gewählt");
-  if(!selectedDay) return showToast("Bitte zuerst einen Tag wählen");
+    if(!selectedRecipeId) return showToast("Kein Rezept gewählt");
+    if(!selectedDay) return showToast("Bitte zuerst einen Tag wählen");
 
-  const r = await fetch(`/wochenplan/${encodeURIComponent(selectedDay)}/${slot}/${Number(selectedRecipeId)}`, {
-  method: "POST"
-});
+    try{
+      const response = await fetch(`/wochenplan/${encodeURIComponent(selectedDay)}/${Number(slot)}/${Number(selectedRecipeId)}`, {method: "POST"});
+      if(!response.ok){
+        throw new Error(`Speichern fehlgeschlagen (${response.status})`);
+      }
 
-  if(r.ok){
-    showToast("Zum Wochenplan hinzugefügt");
-    closePlanModal();
-    loadWeeklyPlan();
-  } else {
-    showToast("Fehler beim Speichern");
+      showToast("Zum Wochenplan hinzugefügt");
+      closePlanModal();
+      await loadWeeklyPlan();
+    }catch(error){
+      console.error("Einplanen fehlgeschlagen:", error);
+      showToast("Fehler beim Speichern");
+    }
   }
-}
 
 function closePlanModal(){
   document.getElementById("planModal").classList.add("hidden");
@@ -2069,33 +1976,31 @@ function closePlanModal(){
     function toggleDarkMode(){document.body.classList.toggle("dark");localStorage.setItem("darkMode",document.body.classList.contains("dark"))}
     if(localStorage.getItem("darkMode")==="true")document.body.classList.add("dark");
 
-    fetch("/rezepte").then(r=>r.json()).then(data=>{allRecipes=data;renderHomeSections()}).catch(()=>{document.getElementById("content").innerHTML=`<div class="error-box">❌ Rezepte konnten nicht geladen werden.</div>`});
-    showHome();
+    async function initializeApp(){
+      showHome();
+
+      try{
+        await ensureRecipesLoaded();
+        const sharedRecipeId = new URLSearchParams(window.location.search).get("recipe");
+        if(sharedRecipeId){
+          await showRecipe(Number(sharedRecipeId));
+        }
+      }catch(error){
+        console.error("App-Start fehlgeschlagen:", error);
+      }
+    }
+
+    initializeApp();
 
     async function backToRecipes(){await loadRecipes();setTimeout(()=>{window.scrollTo({top:recipeScrollPosition,behavior:"auto"})},100)}
     async function goBackFromRecipe(){
-  if(previousView === "favorites"){
-    await loadFavorites();
-    return;
-  }
-
-  if(previousView === "recent"){
-    loadRecentRecipes();
-    return;
-  }
-
-  if(previousView === "rescue"){
-    loadFoodRescue();
-    return;
-  }
-
-  if(previousView === "plan"){
-    await loadWeeklyPlan();
-    return;
-  }
-
-  await backToRecipes();
-}
+      if(previousView === "favorites") return loadFavorites();
+      if(previousView === "recent") return loadRecentRecipes();
+      if(previousView === "rescue") return loadFoodRescue();
+      if(previousView === "plan") return loadWeeklyPlan();
+      if(previousView === "list") return loadShoppingList();
+      return backToRecipes();
+    }
   </script>
   <div id="planModal" class="modal hidden">
   <div class="modal-box">

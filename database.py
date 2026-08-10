@@ -215,10 +215,10 @@ class Database:
         self.import_external_recipes()
 
     def init_schema(self) -> None:
-        self.conn.executescript(
-            """
-            PRAGMA foreign_keys = ON;
+        self.conn.execute("PRAGMA foreign_keys = ON")
 
+        self.conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS recipes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
@@ -231,15 +231,78 @@ class Database:
                 favorit INTEGER NOT NULL DEFAULT 0,
                 zutaten_json TEXT NOT NULL DEFAULT '[]',
                 anleitung TEXT NOT NULL DEFAULT ''
-            );
+            )
+            """
+        )
 
-            CREATE TABLE IF NOT EXISTS weekly_plan (
-                day TEXT NOT NULL,
-                slot INTEGER NOT NULL,
-                recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
-                PRIMARY KEY(day, slot)
-            );
-            """)
+        # Migration: ältere Versionen hatten nur day + recipe_id.
+        # CREATE TABLE IF NOT EXISTS würde diese Tabelle nicht aktualisieren.
+        table_exists = self.conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='weekly_plan'"
+        ).fetchone()
+
+        if table_exists:
+            info = self.conn.execute("PRAGMA table_info(weekly_plan)").fetchall()
+            columns = {row["name"] for row in info}
+            pk_columns = [
+                row["name"]
+                for row in sorted(info, key=lambda r: r["pk"] or 999)
+                if row["pk"]
+            ]
+
+            needs_migration = "slot" not in columns or pk_columns != ["day", "slot"]
+
+            if needs_migration:
+                self.conn.execute("ALTER TABLE weekly_plan RENAME TO weekly_plan_legacy")
+                self.conn.execute(
+                    """
+                    CREATE TABLE weekly_plan (
+                        day TEXT NOT NULL,
+                        slot INTEGER NOT NULL CHECK(slot BETWEEN 1 AND 3),
+                        recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
+                        PRIMARY KEY(day, slot)
+                    )
+                    """
+                )
+
+                legacy_columns = {
+                    row["name"]
+                    for row in self.conn.execute("PRAGMA table_info(weekly_plan_legacy)").fetchall()
+                }
+
+                # Alte Einzelrezepte werden als Mittagessen (Slot 2) übernommen.
+                if {"day", "recipe_id"}.issubset(legacy_columns):
+                    if "slot" in legacy_columns:
+                        self.conn.execute(
+                            """
+                            INSERT OR IGNORE INTO weekly_plan(day, slot, recipe_id)
+                            SELECT day,
+                                   CASE WHEN slot BETWEEN 1 AND 3 THEN slot ELSE 2 END,
+                                   recipe_id
+                            FROM weekly_plan_legacy
+                            """
+                        )
+                    else:
+                        self.conn.execute(
+                            """
+                            INSERT OR IGNORE INTO weekly_plan(day, slot, recipe_id)
+                            SELECT day, 2, recipe_id
+                            FROM weekly_plan_legacy
+                            """
+                        )
+
+                self.conn.execute("DROP TABLE weekly_plan_legacy")
+        else:
+            self.conn.execute(
+                """
+                CREATE TABLE weekly_plan (
+                    day TEXT NOT NULL,
+                    slot INTEGER NOT NULL CHECK(slot BETWEEN 1 AND 3),
+                    recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
+                    PRIMARY KEY(day, slot)
+                )
+                """
+            )
 
         for day in DAYS:
             for slot in range(1, 4):
@@ -497,29 +560,26 @@ class Database:
         self.conn.commit()
 
     def set_weekly_plan(self, plan: dict) -> None:
+        entries = []
         for day, slots in plan.items():
             if isinstance(slots, dict):
                 for slot, recipe_id in slots.items():
-                    self.set_weekly_plan_slot(day, int(slot), recipe_id)
+                    entries.append((day, int(slot), recipe_id))
+        self.set_weekly_plan_bulk(entries)
 
+    def set_weekly_plan_bulk(self, entries: list[tuple[str, int, int | None]]) -> None:
+        with self.conn:
+            for day, slot, recipe_id in entries:
+                self.conn.execute(
+                    """
+                    INSERT INTO weekly_plan(day, slot, recipe_id)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(day, slot)
+                    DO UPDATE SET recipe_id = excluded.recipe_id
+                    """,
+                    (day, slot, None if recipe_id == 0 else recipe_id),
+                )
 
-def set_weekly_plan(self, plan: dict) -> None:
-    for day, slots in plan.items():
-        if isinstance(slots, dict):
-            for slot, recipe_id in slots.items():
-                self.set_weekly_plan_slot(day, int(slot), recipe_id)
-
-
-    def add_profile_event(self, kind: str, value: str) -> None:
-        self.conn.execute(
-            "INSERT INTO profile_events(kind, value) VALUES (?, ?)",
-            (kind, value),
-        )
-        self.conn.commit()
-
-    def profile_values(self, kind: str, limit: int = 300) -> list[str]:
-        rows = self.conn.execute(
-            "SELECT value FROM profile_events WHERE kind = ? ORDER BY id DESC LIMIT ?",
-            (kind, limit),
-        ).fetchall()
-        return [row["value"] for row in rows]
+    def reset_weekly_plan(self) -> None:
+        entries = [(day, slot, None) for day in DAYS for slot in (1, 2, 3)]
+        self.set_weekly_plan_bulk(entries)

@@ -2,7 +2,7 @@ import os
 import random
 from dataclasses import asdict
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -119,6 +119,16 @@ class RezeptCreate(BaseModel):
     anleitung: str = "Keine Anleitung vorhanden."
 
 
+class WeeklyPlanEntry(BaseModel):
+    day: str
+    slot: int = Field(ge=1, le=3)
+    recipe_id: int | None = None
+
+
+class WeeklyPlanBulk(BaseModel):
+    entries: list[WeeklyPlanEntry] = Field(default_factory=list)
+
+
 app = FastAPI()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -148,7 +158,7 @@ def delete_pdf_recipes():
 
 @app.get("/")
 def home():
-    return FileResponse("static/index.html")
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
 @app.get("/rezepte")
@@ -234,48 +244,70 @@ def roulette():
     return daten
 
 
+VALID_DAYS = [
+    "Montag", "Dienstag", "Mittwoch", "Donnerstag",
+    "Freitag", "Samstag", "Sonntag"
+]
+
+
+def validate_plan_target(day: str, slot: int) -> None:
+    if day not in VALID_DAYS:
+        raise HTTPException(status_code=400, detail="Ungültiger Wochentag")
+    if slot not in (1, 2, 3):
+        raise HTTPException(status_code=400, detail="Ungültiger Mahlzeiten-Slot")
+
+
 @app.get("/wochenplan")
 def wochenplan():
     db = get_db()
     return db.weekly_plan()
-    
-
 
 
 @app.post("/wochenplan/reset")
 def reset_wochenplan():
     db = get_db()
-
-    days = [
-        "Montag",
-        "Dienstag",
-        "Mittwoch",
-        "Donnerstag",
-        "Freitag",
-        "Samstag",
-        "Sonntag"
-    ]
-
-    for day in days:
-        for slot in [1, 2, 3]:
-            db.set_weekly_plan_slot(day, slot, None)
-
+    db.reset_weekly_plan()
     return {"message": "Wochenplan geleert"}
 
 
 @app.post("/wochenplan/clear/{day}")
 def loesche_tag(day: str):
+    if day not in VALID_DAYS:
+        raise HTTPException(status_code=400, detail="Ungültiger Wochentag")
+
     db = get_db()
-
-    for slot in [1, 2, 3]:
-        db.set_weekly_plan_slot(day, slot, None)
-
+    db.set_weekly_plan_bulk([(day, slot, None) for slot in (1, 2, 3)])
     return {"message": f"{day} wurde gelöscht"}
+
+
+@app.post("/wochenplan/bulk")
+def set_weekly_plan_bulk(payload: WeeklyPlanBulk):
+    db = get_db()
+    entries = []
+
+    for entry in payload.entries:
+        validate_plan_target(entry.day, entry.slot)
+
+        recipe_id = entry.recipe_id
+        if recipe_id in (None, 0):
+            recipe_id = None
+        elif not db.get_recipe(int(recipe_id)):
+            raise HTTPException(status_code=404, detail=f"Rezept {recipe_id} nicht gefunden")
+
+        entries.append((entry.day, entry.slot, recipe_id))
+
+    db.set_weekly_plan_bulk(entries)
+    return {"ok": True, "saved": len(entries)}
 
 
 @app.post("/wochenplan/{day}/{slot}/{recipe_id}")
 def set_weekly_plan(day: str, slot: int, recipe_id: int):
+    validate_plan_target(day, slot)
     db = get_db()
+
+    if recipe_id != 0 and not db.get_recipe(recipe_id):
+        raise HTTPException(status_code=404, detail="Rezept nicht gefunden")
+
     db.set_weekly_plan_slot(day, slot, recipe_id)
     return {"ok": True}
 
