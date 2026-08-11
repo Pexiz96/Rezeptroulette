@@ -1,38 +1,111 @@
 import os
 import random
-import re
 from dataclasses import asdict
-from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from database import Database
 from models import Rezept
 
+import re
 
-DAYS = [
-    "Montag",
-    "Dienstag",
-    "Mittwoch",
-    "Donnerstag",
-    "Freitag",
-    "Samstag",
-    "Sonntag",
-]
+def clean_text(text):
+    if not text:
+        return ""
 
+    text = str(text)
 
-BASE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = BASE_DIR / "static"
-BILDER_DIR = BASE_DIR / "bilder"
+    replacements = {
+        "Ã¤": "ä",
+        "Ã¶": "ö",
+        "Ã¼": "ü",
+        "ÃŸ": "ß",
+        "â€“": "-",
+        "â€œ": "\"",
+        "â€": "\"",
+    }
 
-# Verhindert Startfehler, falls Ordner noch nicht existieren.
-STATIC_DIR.mkdir(exist_ok=True)
-BILDER_DIR.mkdir(exist_ok=True)
+    for wrong, correct in replacements.items():
+        text = text.replace(wrong, correct)
 
+    text = re.sub(r'\s+', ' ', text)
+
+    return text.strip()
+
+def normalize_ingredient_name(text):
+    text = str(text).lower().strip()
+
+    text = clean_text(text)
+
+    text = text.replace("–", "-")
+    text = text.replace("oder", " ")
+    text = text.replace("nach wahl", "")
+    text = text.replace("optional", "")
+    text = text.replace("belieben", "")
+
+    text = re.sub(r"\d+\s*[-–]\s*\d+", "", text)
+    text = re.sub(r"\d+[.,]?\d*", "", text)
+
+    text = re.sub(
+        r"\b(g|kg|ml|l|el|tl|stück|stk|dose|dosen|tüte|packung|päckchen|prise|bund|glas|becher)\b",
+        "",
+        text
+    )
+
+    text = re.sub(r"\([^)]*\)", "", text)
+    text = re.sub(r"[^a-zäöüß\s-]", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    replacements = {
+        "tomaten": "tomate",
+        "gehackte tomaten": "tomate",
+        "tomatensauce": "tomate",
+        "tomatenmark": "tomatenmark",
+
+        "zwiebel": "zwiebel",
+        "zwiebeln": "zwiebel",
+
+        "eier": "ei",
+        "eigelb": "ei",
+
+        "hähnchenbrust": "hähnchen",
+        "hähnchen": "hähnchen",
+        "hähnchen oder hackfleisch": "hähnchen/hackfleisch",
+
+        "käse": "käse",
+        "geriebener käse": "käse",
+        "light-reibekäse": "käse",
+
+        "skyr": "skyr",
+        "magerquark": "magerquark",
+        "frischkäse": "frischkäse",
+
+        "nudeln": "nudeln",
+        "wraps": "wrap",
+        "low-carb-wrap": "wrap",
+        "bagels": "bagel",
+
+        "olivenöl": "öl",
+        "öl": "öl",
+
+        "zucker": "zucker",
+        "erythrit": "zuckerersatz",
+
+        "mehl": "mehl",
+        "dinkelmehl": "mehl",
+
+        "backpulver": "backpulver",
+        "zimt": "zimt",
+        "salz": "salz",
+        "pfeffer": "pfeffer",
+        "oregano": "oregano",
+    }
+
+    return replacements.get(text, text)
 
 class RezeptCreate(BaseModel):
     name: str
@@ -46,10 +119,24 @@ class RezeptCreate(BaseModel):
     anleitung: str = "Keine Anleitung vorhanden."
 
 
-app = FastAPI(title="Rezeptroulette API")
+class WeeklyPlanEntry(BaseModel):
+    day: str
+    slot: int = Field(ge=1, le=3)
+    recipe_id: int | None = None
 
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-app.mount("/bilder", StaticFiles(directory=str(BILDER_DIR)), name="bilder")
+
+class WeeklyPlanBulk(BaseModel):
+    entries: list[WeeklyPlanEntry] = Field(default_factory=list)
+
+
+app = FastAPI()
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+BILDER_DIR = os.path.join(BASE_DIR, "bilder")
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/bilder", StaticFiles(directory=BILDER_DIR), name="bilder")
 
 app.add_middleware(
     CORSMiddleware,
@@ -60,91 +147,31 @@ app.add_middleware(
 )
 
 
-def get_db() -> Database:
+def get_db():
     return Database()
 
-DEFAULT_USER_ID = 1
-
-def get_weekly_plan(db):
-    try:
-        return db.weekly_plan(DEFAULT_USER_ID)
-    except TypeError:
-        return get_weekly_plan(db)
-
-def save_weekly_plan(db, plan):
-    try:
-        return db.set_weekly_plan(DEFAULT_USER_ID, plan)
-    except TypeError:
-        return save_weekly_plan(db, plan)
-
-
-def clean_text(text):
-    if not text:
-        return ""
-
-    text = str(text)
-    replacements = {
-        "Ã¤": "ä",
-        "Ã¶": "ö",
-        "Ã¼": "ü",
-        "ÃŸ": "ß",
-        "â€“": "-",
-        "â€œ": '"',
-        "â€\u009d": '"',
-    }
-
-    for wrong, correct in replacements.items():
-        text = text.replace(wrong, correct)
-
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def normalize_day(day: str) -> str:
-    """Akzeptiert z. B. montag, Montag oder ' Montag '."""
-    cleaned = day.strip().lower()
-    for valid_day in DAYS:
-        if valid_day.lower() == cleaned:
-            return valid_day
-    raise HTTPException(status_code=404, detail="Tag nicht gefunden")
-
-
-def recipe_to_dict(recipe: Rezept | None) -> dict | None:
-    if recipe is None:
-        return None
-
-    data = asdict(recipe)
-    if data.get("bild"):
-        data["bild_url"] = f"/bilder/{data['bild']}"
-    else:
-        data["bild_url"] = ""
-    return data
-
+@app.delete("/delete-pdf-recipes")
+def delete_pdf_recipes():
+    db = get_db()
+    deleted = db.delete_pdf_imports()
+    return {"deleted": deleted}
 
 @app.get("/")
 def home():
-    static_index = STATIC_DIR / "index.html"
-    root_index = BASE_DIR / "index.html"
-
-    if static_index.exists():
-        return FileResponse(static_index)
-    if root_index.exists():
-        return FileResponse(root_index)
-
-    raise HTTPException(status_code=404, detail="index.html nicht gefunden")
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
 @app.get("/rezepte")
 def get_rezepte():
     db = get_db()
-    return [recipe_to_dict(recipe) for recipe in db.all_recipes()]
-
+    return [asdict(r) for r in db.all_recipes()]
 
 @app.post("/rezept-erstellen")
 def rezept_erstellen(daten: RezeptCreate):
     db = get_db()
 
     if not daten.name.strip():
-        raise HTTPException(status_code=400, detail="Name fehlt")
+        return {"error": "Name fehlt"}
 
     rezept = Rezept(
         name=daten.name.strip(),
@@ -161,16 +188,15 @@ def rezept_erstellen(daten: RezeptCreate):
 
     recipe_id = db.save_recipe(rezept)
     saved = db.get_recipe(recipe_id)
-    return recipe_to_dict(saved)
 
-
+    return asdict(saved)
 @app.post("/rezept-aus-link")
 def rezept_aus_link(daten: dict):
     db = get_db()
     url = daten.get("url", "").strip()
 
     if not url:
-        raise HTTPException(status_code=400, detail="Kein Link angegeben")
+        return {"error": "Kein Link angegeben"}
 
     rezept = Rezept(
         name="Importiertes Rezept",
@@ -182,20 +208,18 @@ def rezept_aus_link(daten: dict):
         tags=["Import"],
         favorit=False,
         zutaten=["Bitte Zutaten prüfen"],
-        anleitung=f"Quelle:\n{url}\n\nBitte Zutaten und Anleitung ergänzen.",
+        anleitung=f"Quelle:\n{url}\n\nBitte Zutaten und Anleitung ergänzen."
     )
 
     recipe_id = db.save_recipe(rezept)
     saved = db.get_recipe(recipe_id)
-    return recipe_to_dict(saved)
 
-
-@app.delete("/delete-pdf-recipes")
-def delete_pdf_recipes():
+    return asdict(saved)
+@app.delete("/rezepte/{recipe_id}")
+def rezept_loeschen(recipe_id: int):
     db = get_db()
-    deleted = db.delete_pdf_imports()
-    return {"deleted": deleted}
-
+    db.delete_recipe(recipe_id)
+    return {"message": "Rezept gelöscht"}
 
 @app.delete("/rezepte/importierte")
 def importierte_rezepte_loeschen():
@@ -203,257 +227,412 @@ def importierte_rezepte_loeschen():
     db.conn.execute("DELETE FROM recipes WHERE kueche = ?", ("Link Import",))
     db.conn.commit()
     return {"message": "Importierte Rezepte gelöscht"}
-
-
-@app.delete("/rezepte/{recipe_id}")
-def rezept_loeschen(recipe_id: int):
-    db = get_db()
-    recipe = db.get_recipe(recipe_id)
-    if not recipe:
-        raise HTTPException(status_code=404, detail="Rezept nicht gefunden")
-
-    db.delete_recipe(recipe_id)
-    return {"message": "Rezept gelöscht"}
-
-
+    
 @app.get("/roulette")
 def roulette():
     db = get_db()
     rezepte = db.all_recipes()
 
     if not rezepte:
-        raise HTTPException(status_code=404, detail="Keine Rezepte vorhanden")
+        return {"error": "Keine Rezepte vorhanden"}
 
-    return recipe_to_dict(random.choice(rezepte))
+    rezept = random.choice(rezepte)
+    daten = asdict(rezept)
+
+    daten["bild_url"] = f"/bilder/{daten['bild']}"
+
+    return daten
+
+
+VALID_DAYS = [
+    "Montag", "Dienstag", "Mittwoch", "Donnerstag",
+    "Freitag", "Samstag", "Sonntag"
+]
+
+
+def validate_plan_target(day: str, slot: int) -> None:
+    if day not in VALID_DAYS:
+        raise HTTPException(status_code=400, detail="Ungültiger Wochentag")
+    if slot not in (1, 2, 3):
+        raise HTTPException(status_code=400, detail="Ungültiger Mahlzeiten-Slot")
 
 
 @app.get("/wochenplan")
 def wochenplan():
     db = get_db()
-    plan = get_weekly_plan(db)
-    result = {}
-
-    for day, value in plan.items():
-        recipe_id = None
-
-        if isinstance(value, dict):
-            recipe_id = value.get(1) or value.get("1")
-        else:
-            recipe_id = value
-
-        if recipe_id:
-            recipe = db.get_recipe(recipe_id)
-            result[day] = asdict(recipe) if recipe else None
-        else:
-            result[day] = None
-
-    return result
-
-
-DEFAULT_USER_ID = 1
-DEFAULT_SLOT = 1
+    return db.weekly_plan()
 
 
 @app.post("/wochenplan/reset")
 def reset_wochenplan():
     db = get_db()
-
-    for day in DAYS:
-        for slot in [1, 2, 3]:
-            db.set_weekly_plan_slot(DEFAULT_USER_ID, day, slot, None)
-
-    return {"message": "Wochenplan zurückgesetzt"}
+    db.reset_weekly_plan()
+    return {"message": "Wochenplan geleert"}
 
 
 @app.post("/wochenplan/clear/{day}")
 def loesche_tag(day: str):
+    if day not in VALID_DAYS:
+        raise HTTPException(status_code=400, detail="Ungültiger Wochentag")
+
     db = get_db()
-    valid_day = normalize_day(day)
-
-    for slot in [1, 2, 3]:
-        db.set_weekly_plan_slot(DEFAULT_USER_ID, valid_day, slot, None)
-
-    return {"message": f"{valid_day} wurde gelöscht", "day": valid_day}
+    db.set_weekly_plan_bulk([(day, slot, None) for slot in (1, 2, 3)])
+    return {"message": f"{day} wurde gelöscht"}
 
 
-@app.post("/wochenplan/{day}/{recipe_id}")
-def setze_wochenplan(day: str, recipe_id: int):
+@app.post("/wochenplan/bulk")
+def set_weekly_plan_bulk(payload: WeeklyPlanBulk):
     db = get_db()
-    valid_day = normalize_day(day)
+    entries = []
 
-    recipe = db.get_recipe(recipe_id)
-    if not recipe:
+    for entry in payload.entries:
+        validate_plan_target(entry.day, entry.slot)
+
+        recipe_id = entry.recipe_id
+        if recipe_id in (None, 0):
+            recipe_id = None
+        elif not db.get_recipe(int(recipe_id)):
+            raise HTTPException(status_code=404, detail=f"Rezept {recipe_id} nicht gefunden")
+
+        entries.append((entry.day, entry.slot, recipe_id))
+
+    db.set_weekly_plan_bulk(entries)
+    return {"ok": True, "saved": len(entries)}
+
+
+@app.post("/wochenplan/{day}/{slot}/{recipe_id}")
+def set_weekly_plan(day: str, slot: int, recipe_id: int):
+    validate_plan_target(day, slot)
+    db = get_db()
+
+    if recipe_id != 0 and not db.get_recipe(recipe_id):
         raise HTTPException(status_code=404, detail="Rezept nicht gefunden")
 
-    db.set_weekly_plan_slot(
-        DEFAULT_USER_ID,
-        valid_day,
-        DEFAULT_SLOT,
-        recipe_id
+    db.set_weekly_plan_slot(day, slot, recipe_id)
+    return {"ok": True}
+
+def parse_ingredient(text):
+    original = str(text).strip()
+    cleaned = clean_text(original).lower()
+    cleaned = cleaned.replace("½", "0.5")
+    cleaned = cleaned.replace("optional:", "")
+    cleaned = cleaned.replace("optional", "")
+    cleaned = cleaned.replace("nach wahl", "")
+    cleaned = cleaned.replace("nach belieben", "")
+    cleaned = cleaned.replace("zum servieren", "")
+    cleaned = cleaned.replace("oder gemüse", "")
+    cleaned = cleaned.strip()
+
+    cleaned = cleaned.replace("–", "-")
+    cleaned = cleaned.replace(" ca. ", " ")
+    cleaned = cleaned.replace("ca. ", "")
+    cleaned = cleaned.replace("optional", "")
+    cleaned = cleaned.replace("nach wahl", "")
+    cleaned = cleaned.replace("nach belieben", "")
+    cleaned = cleaned.replace("nach belieben", "")
+
+    match = re.match(
+        r"^(\d+(?:[.,]\d+)?)(?:\s*-\s*\d+(?:[.,]\d+)?)?\s*(g|kg|ml|l|el|tl|stück|stk|dose|dosen|scheiben|tüte|packung|päckchen)?\s+(.+)$",
+        cleaned
     )
 
-    return {
-        "message": "Gespeichert",
-        "day": valid_day,
-        "slot": DEFAULT_SLOT,
-        "recipe_id": recipe_id,
-        "recipe": recipe_to_dict(recipe),
+    if not match:
+        name = normalize_ingredient_name(cleaned)
+        return {
+            "original": original,
+            "amount": None,
+            "unit": "",
+            "name": name,
+        }
+
+    amount = float(match.group(1).replace(",", "."))
+    unit = match.group(2) or ""
+    name = normalize_ingredient_name(match.group(3))
+
+    unit_map = {
+        "stk": "stück",
+        "dose": "dose",
+        "dosen": "dose",
+        "tl": "TL",
+        "el": "EL",
+        "päckchen": "Päckchen",
+        "dose": "Dose",
+        "dosen": "Dose",
+        "tüte": "Tüte",
+        "scheiben": "Scheiben",
     }
-@app.post("/wochenplan/auto")
-def wochenplan_auto():
-    db = get_db()
-    recipes = db.all_recipes()
 
-    if not recipes:
-        raise HTTPException(status_code=404, detail="Keine Rezepte vorhanden")
+    unit = unit_map.get(unit, unit)
 
-    plan = get_weekly_plan(db)
-    used_ids = set()
-    used_tags = set()
+    name_map = {
+    # Eier
+    "ei": "ei",
+    "eier": "ei",
+    "eigelb": "ei",
 
-    # Bereits geplante Rezepte sammeln
-    for day_plan in plan.values():
-        if isinstance(day_plan, dict):
-            for recipe_id in day_plan.values():
-                if recipe_id:
-                    used_ids.add(recipe_id)
-        elif day_plan:
-            used_ids.add(day_plan)
+    "frühlingszwiebeln": "frühlingszwiebel",
+    "frühlingszwiebel": "frühlingszwiebel",
 
-    # Tags der bereits geplanten Rezepte sammeln
-    for recipe in recipes:
-        if recipe.id in used_ids:
-            used_tags.update(recipe.tags or [])
+    "gurken": "gurke",
+    "gurke": "gurke",
 
-    available = [recipe for recipe in recipes if recipe.id not in used_ids]
+    "parmesan": "parmesan",
 
-    for day in DAYS:
-        current = plan.get(day)
+    "mozzarella light": "mozzarella",
+    "mozzarella": "mozzarella",
 
-        if isinstance(current, dict):
-            occupied = current.get(1) or current.get("1")
-        else:
-            occupied = current
+    "päckchen backpulver": "backpulver",
 
-        if occupied:
+    # Zwiebeln
+    "zwiebel": "zwiebel",
+    "zwiebeln": "zwiebel",
+    "rote zwiebel": "zwiebel",
+    "kleine zwiebel": "zwiebel",
+
+    # Knoblauch
+    "knoblauch": "knoblauch",
+    "knoblauchzehe": "knoblauch",
+    "knoblauchzehen": "knoblauch",
+
+    # Tomaten
+    "tomate": "tomate",
+    "tomaten": "tomate",
+    "gehackte tomaten": "tomate",
+    "dose tomaten": "tomate",
+
+    # Paprika
+    "paprika": "paprika",
+    "rote paprika": "paprika",
+    "kleine paprika": "paprika",
+
+    # Käse
+    "käse": "käse",
+    "geriebener käse": "käse",
+    "scheiben käse": "käse",
+    "light-reibekäse": "käse",
+
+    # Backwaren
+    "wrap": "wrap",
+    "wraps": "wrap",
+    "low-carb-wrap": "wrap",
+
+    "bagel": "bagel",
+    "bagels": "bagel",
+
+    # Gewürze
+    "salz": "salz",
+    "pfeffer": "pfeffer",
+    "muskat": "muskat",
+    "oregano": "oregano",
+
+    # Öle
+    "öl": "öl",
+    "olivenöl": "öl",
+    "butter": "butter",
+
+    # Backzutaten
+    "backpulver": "backpulver",
+    "mehl": "mehl",
+    "dinkelmehl": "mehl",
+    "weizenmehl": "mehl",
+
+    # Milchprodukte
+    "skyr": "skyr",
+    "magerquark": "magerquark",
+    "frischkäse": "frischkäse",
+    "hüttenkäse": "hüttenkäse",
+    "sahne": "sahne",
+    "milch": "milch",
+}
+    name = name_map.get(name, name)
+
+    return {
+        "original": original,
+        "amount": amount,
+        "unit": unit,
+        "name": name,
+    }
+
+def ingredient_category(name):
+    text = normalize_ingredient_name(name).lower()
+
+    category_map = {
+        "🥦 Obst & Gemüse": [
+            "apfel", "äpfel", "banane", "bananen", "beeren", "erdbeere", "erdbeeren",
+            "himbeere", "himbeeren", "blaubeere", "blaubeeren",
+            "tomate", "tomaten", "tomatensauce", "tomatenmark",
+            "paprika", "zucchini", "gurke", "gurken", "karotte", "karotten",
+            "möhre", "möhren", "zwiebel", "zwiebeln", "lauchzwiebel",
+            "frühlingszwiebel", "knoblauch", "kartoffel", "kartoffeln",
+            "brokkoli", "weißkohl", "kohl", "salat", "eisbergsalat", "erbsen"
+        ],
+
+        "🥛 Milchprodukte & Eier": [
+            "milch", "mandelmilch", "sahne", "protein-sahne", "joghurt",
+            "skyr", "quark", "magerquark", "frischkäse", "kräuterfrischkäse",
+            "hüttenkäse", "käse", "mozzarella", "parmesan", "schmand",
+            "butter", "ei", "eier"
+        ],
+
+        "🥩 Fleisch & Fisch": [
+            "hähnchen", "hähnchenbrust", "hähnchenbrüste", "hackfleisch",
+            "gyrosfleisch", "rind", "rindergulasch", "kassler", "speck",
+            "speckwürfel", "putenbrust", "würstchen", "fischstäbchen",
+            "thunfisch", "schweineschnitzel"
+        ],
+
+        "🍝 Trockenwaren & Beilagen": [
+            "reis", "milchreis", "nudeln", "spaghetti", "pasta", "tortellini",
+            "gnocchi", "mehl", "dinkelmehl", "weizenmehl", "maismehl",
+            "haferflocken", "wrap", "wraps", "bagel", "bagels", "toast",
+            "brot", "brötchen", "burgerbrötchen", "eiweißbrot", "brezel",
+            "brezeln", "paniermehl", "protein-biskuit"
+        ],
+
+        "🧂 Gewürze & Backen": [
+            "salz", "pfeffer", "paprikapulver", "oregano", "zimt", "muskat",
+            "italienische kräuter", "kräuter", "kümmel", "chili",
+            "backpulver", "sahnesteif", "vanillepuddingpulver",
+            "vanillezucker", "vanilleextrakt", "zucker", "zuckerersatz",
+            "erythrit", "honig", "öl", "olivenöl", "speisestärke"
+        ],
+
+        "🥫 Konserven & Soßen": [
+            "kidneybohnen", "mais", "tomaten", "gehackte tomaten",
+            "brühe", "rinderbrühe", "pesto", "sojasauce", "ketchup",
+            "mayonnaise", "miracle whip", "salsa", "tzatziki", "joghurtsoße"
+        ],
+
+        "🍫 Süßes & Toppings": [
+            "chunky flavour", "granola", "keksbrösel", "schokodrops",
+            "light-schokodrops", "schokolade", "trockenfrüchte",
+            "walnüsse", "chiasamen", "sonnenblumenkerne", "mohn",
+            "erdnussbutter", "salatkernmischung", "körner"
+        ],
+
+        "📦 Sonstiges": []
+    }
+
+    for category, keywords in category_map.items():
+        if category == "📦 Sonstiges":
             continue
 
-        if not available:
-            available = recipes.copy()
+        for keyword in keywords:
+            if keyword in text:
+                return category
 
-        preferred = [
-            recipe for recipe in available
-            if not any(tag in used_tags for tag in (recipe.tags or []))
-        ]
+    return "📦 Sonstiges"
 
-        if preferred:
-            recipe = random.choice(preferred)
-        else:
-            recipe = random.choice(available)
-
-        db.set_weekly_plan_slot(
-            DEFAULT_USER_ID,
-            day,
-            DEFAULT_SLOT,
-            recipe.id
-        )
-
-        used_ids.add(recipe.id)
-        used_tags.update(recipe.tags or [])
-        available = [r for r in available if r.id != recipe.id]
-
-    return {"message": "Woche automatisch geplant"}
-
-def category_for_ingredient(text: str) -> str:
-    t = text.lower()
-
-    if any(w in t for w in ["apfel", "banane", "tomate", "gurke", "paprika", "zwiebel", "kartoffel", "salat", "zucchini", "karotte", "möhre", "knoblauch"]):
-        return "Obst & Gemüse"
-
-    if any(w in t for w in ["hack", "fleisch", "hähnchen", "huhn", "rind", "schwein", "lachs", "fisch", "speck", "schinken"]):
-        return "Fleisch & Fisch"
-
-    if any(w in t for w in ["milch", "sahne", "käse", "mozzarella", "joghurt", "quark", "butter", "ei"]):
-        return "Kühlregal"
-
-    if any(w in t for w in ["nudel", "pasta", "reis", "mehl", "zucker", "brot", "tortilla", "lasagne"]):
-        return "Trockenwaren & Backwaren"
-
-    if any(w in t for w in ["dose", "tomaten", "bohnen", "mais", "passata", "sauce", "brühe", "pesto"]):
-        return "Konserven & Saucen"
-
-    if any(w in t for w in ["salz", "pfeffer", "öl", "essig", "paprika", "oregano", "curry", "chili"]):
-        return "Gewürze & Vorrat"
-
-    return "Sonstiges"
-
-
-def shopping_list(recipes: list[Rezept]):
-    categories: dict[str, list[str]] = {}
-    pantry: list[str] = []
+def shopping_list(recipes):
+    categories = {}
+    pantry = []
+    ingredient_map = {}
 
     for recipe in recipes:
-        zutaten = recipe.zutaten or []
+        zutaten = getattr(recipe, "zutaten", None) or getattr(recipe, "ingredients", None) or []
 
         if isinstance(zutaten, str):
             zutaten = [z.strip() for z in zutaten.split(",") if z.strip()]
 
         for zutat in zutaten:
-            zutat = str(zutat).strip()
-            if not zutat:
-                continue
+            parsed = parse_ingredient(zutat)
 
-            category = category_for_ingredient(zutat)
-            categories.setdefault(category, []).append(zutat)
+            key = f'{parsed["name"]}|{parsed["unit"]}'
 
-    order = [
-        "Obst & Gemüse",
-        "Fleisch & Fisch",
-        "Kühlregal",
-        "Trockenwaren & Backwaren",
-        "Konserven & Saucen",
-        "Gewürze & Vorrat",
-        "Sonstiges",
-    ]
+            if key not in ingredient_map:
+                ingredient_map[key] = {
+                    "name": parsed["name"],
+                    "unit": parsed["unit"],
+                    "amount": parsed["amount"],
+                    "examples": [parsed["original"]],
+                    "count": 1
+                }
+            else:
+                existing = ingredient_map[key]
 
-    sorted_categories = {}
+                if existing["amount"] is not None and parsed["amount"] is not None:
+                    existing["amount"] += parsed["amount"]
+                else:
+                    existing["amount"] = None
 
-    for category in order:
-        items = categories.get(category, [])
-        if items:
-            sorted_categories[category] = list(dict.fromkeys(items))
+                existing["examples"].append(parsed["original"])
+                existing["count"] += 1
 
-    return sorted_categories, pantry
+    result = []
+
+    for item in ingredient_map.values():
+        name = item["name"]
+        unit = item["unit"]
+        amount = item["amount"]
+
+        if amount is not None:
+            if amount.is_integer():
+                amount = int(amount)
+
+            if unit in ["", "stück"]:
+                if name == "ei":
+                    label = "Ei" if amount == 1 else "Eier"
+                elif name == "zwiebel":
+                    label = "Zwiebel" if amount == 1 else "Zwiebeln"
+                elif name == "tomate":
+                    label = "Tomate" if amount == 1 else "Tomaten"
+                elif name == "knoblauch":
+                    label = "Knoblauchzehe" if amount == 1 else "Knoblauchzehen"
+                elif name == "frühlingszwiebel":
+                    label = "Frühlingszwiebel" if amount == 1 else "Frühlingszwiebeln"
+                else:
+                    label = name.capitalize()
+
+                result.append(f"{amount} {label}")
+            else:
+                result.append(f"{amount} {unit} {name}")
+        else:
+            if item["count"] > 1:
+                result.append(f'{item["examples"][0]} ({item["count"]}x)')
+            else:
+                result.append(item["examples"][0])
+
+    categories = {}
+
+    for item in result:
+        category = ingredient_category(item)
+
+        if category not in categories:
+            categories[category] = []
+
+        categories[category].append(item)
+
+    for category in categories:
+        categories[category] = sorted(
+            categories[category],
+            key=lambda x: x.lower()
+        )
+
+    return categories, pantry
 
 
 @app.get("/einkaufsliste")
 def einkaufsliste():
     db = get_db()
-    plan = get_weekly_plan(db)
+    plan = db.weekly_plan()
 
     recipes = []
 
-    for day_plan in plan.values():
-        if isinstance(day_plan, dict):
-            recipe_ids = day_plan.values()
-        else:
-            recipe_ids = [day_plan]
-
-        for recipe_id in recipe_ids:
-            if recipe_id:
-                recipe = db.get_recipe(int(recipe_id))
-                if recipe:
-                    recipes.append(recipe)
+    for day_slots in plan.values():
+        if isinstance(day_slots, dict):
+            for recipe_id in day_slots.values():
+                if recipe_id:
+                    recipe = db.get_recipe(int(recipe_id))
+                    if recipe:
+                        recipes.append(recipe)
+        elif day_slots:
+            recipe = db.get_recipe(int(day_slots))
+            if recipe:
+                recipes.append(recipe)
 
     categories, pantry = shopping_list(recipes)
 
     return {
-        "recipes": [recipe_to_dict(recipe) for recipe in recipes],
         "categories": categories,
         "pantry": pantry,
-        "ingredients": [
-            item
-            for items in categories.values()
-            for item in items
-        ],
     }
