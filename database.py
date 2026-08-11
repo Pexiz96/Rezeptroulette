@@ -311,6 +311,62 @@ class Database:
                     (day, slot),
                 )
 
+        # Benutzerkonten und benutzerspezifische Daten.
+        self.conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                token_hash TEXT NOT NULL UNIQUE,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS user_weekly_plan (
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                day TEXT NOT NULL,
+                slot INTEGER NOT NULL CHECK(slot BETWEEN 1 AND 3),
+                recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
+                PRIMARY KEY(user_id, day, slot)
+            );
+
+            CREATE TABLE IF NOT EXISTS user_favorites (
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+                PRIMARY KEY(user_id, recipe_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS user_ratings (
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+                rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+                PRIMARY KEY(user_id, recipe_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS user_pantry (
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                item TEXT NOT NULL,
+                PRIMARY KEY(user_id, item)
+            );
+
+            CREATE TABLE IF NOT EXISTS user_at_home (
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                item TEXT NOT NULL,
+                PRIMARY KEY(user_id, item)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
+            CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+            """
+        )
+
         self.conn.commit()
 
     def seed_if_empty(self) -> None:
@@ -583,3 +639,177 @@ class Database:
     def reset_weekly_plan(self) -> None:
         entries = [(day, slot, None) for day in DAYS for slot in (1, 2, 3)]
         self.set_weekly_plan_bulk(entries)
+
+    # ---------- Benutzerkonten ----------
+    def create_user(self, email: str, password_hash: str) -> int:
+        cur = self.conn.execute(
+            "INSERT INTO users(email, password_hash) VALUES (?, ?)",
+            (email.strip().lower(), password_hash),
+        )
+        self.conn.commit()
+        return int(cur.lastrowid)
+
+    def get_user_by_email(self, email: str):
+        return self.conn.execute(
+            "SELECT id, email, password_hash, created_at FROM users WHERE email = ? COLLATE NOCASE",
+            (email.strip(),),
+        ).fetchone()
+
+    def get_user(self, user_id: int):
+        return self.conn.execute(
+            "SELECT id, email, password_hash, created_at FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+
+    def update_user_password(self, user_id: int, password_hash: str) -> None:
+        self.conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (password_hash, user_id),
+        )
+        self.conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+        self.conn.commit()
+
+    def delete_user(self, user_id: int) -> None:
+        self.conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        self.conn.commit()
+
+    # ---------- Sessions ----------
+    def create_session(self, user_id: int, token_hash: str, expires_at: str) -> None:
+        self.conn.execute(
+            "INSERT INTO sessions(user_id, token_hash, expires_at) VALUES (?, ?, ?)",
+            (user_id, token_hash, expires_at),
+        )
+        self.conn.commit()
+
+    def get_session_user(self, token_hash: str, now_iso: str):
+        self.conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (now_iso,))
+        row = self.conn.execute(
+            """
+            SELECT u.id, u.email, u.created_at
+            FROM sessions s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.token_hash = ? AND s.expires_at > ?
+            """,
+            (token_hash, now_iso),
+        ).fetchone()
+        self.conn.commit()
+        return row
+
+    def delete_session(self, token_hash: str) -> None:
+        self.conn.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
+        self.conn.commit()
+
+    # ---------- Benutzerspezifischer Wochenplan ----------
+    def user_weekly_plan(self, user_id: int) -> dict[str, dict[int, int | None]]:
+        plan = {day: {1: None, 2: None, 3: None} for day in DAYS}
+        rows = self.conn.execute(
+            "SELECT day, slot, recipe_id FROM user_weekly_plan WHERE user_id = ?",
+            (user_id,),
+        ).fetchall()
+        for row in rows:
+            if row["day"] in plan and row["slot"] in (1, 2, 3):
+                plan[row["day"]][row["slot"]] = row["recipe_id"]
+        return plan
+
+    def set_user_weekly_plan_slot(self, user_id: int, day: str, slot: int, recipe_id: int | None) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO user_weekly_plan(user_id, day, slot, recipe_id)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id, day, slot)
+            DO UPDATE SET recipe_id = excluded.recipe_id
+            """,
+            (user_id, day, slot, None if recipe_id in (None, 0) else recipe_id),
+        )
+        self.conn.commit()
+
+    def set_user_weekly_plan_bulk(self, user_id: int, entries: list[tuple[str, int, int | None]]) -> None:
+        with self.conn:
+            for day, slot, recipe_id in entries:
+                self.conn.execute(
+                    """
+                    INSERT INTO user_weekly_plan(user_id, day, slot, recipe_id)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(user_id, day, slot)
+                    DO UPDATE SET recipe_id = excluded.recipe_id
+                    """,
+                    (user_id, day, slot, None if recipe_id in (None, 0) else recipe_id),
+                )
+
+    def reset_user_weekly_plan(self, user_id: int) -> None:
+        self.conn.execute("DELETE FROM user_weekly_plan WHERE user_id = ?", (user_id,))
+        self.conn.commit()
+
+    # ---------- Favoriten ----------
+    def favorite_ids(self, user_id: int) -> list[int]:
+        rows = self.conn.execute(
+            "SELECT recipe_id FROM user_favorites WHERE user_id = ? ORDER BY recipe_id",
+            (user_id,),
+        ).fetchall()
+        return [int(row["recipe_id"]) for row in rows]
+
+    def toggle_user_favorite(self, user_id: int, recipe_id: int) -> bool:
+        exists = self.conn.execute(
+            "SELECT 1 FROM user_favorites WHERE user_id = ? AND recipe_id = ?",
+            (user_id, recipe_id),
+        ).fetchone()
+        if exists:
+            self.conn.execute(
+                "DELETE FROM user_favorites WHERE user_id = ? AND recipe_id = ?",
+                (user_id, recipe_id),
+            )
+            favorite = False
+        else:
+            self.conn.execute(
+                "INSERT INTO user_favorites(user_id, recipe_id) VALUES (?, ?)",
+                (user_id, recipe_id),
+            )
+            favorite = True
+        self.conn.commit()
+        return favorite
+
+    # ---------- Bewertungen ----------
+    def ratings(self, user_id: int) -> dict[str, int]:
+        rows = self.conn.execute(
+            "SELECT recipe_id, rating FROM user_ratings WHERE user_id = ?",
+            (user_id,),
+        ).fetchall()
+        return {str(row["recipe_id"]): int(row["rating"]) for row in rows}
+
+    def set_rating(self, user_id: int, recipe_id: int, rating: int) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO user_ratings(user_id, recipe_id, rating) VALUES (?, ?, ?)
+            ON CONFLICT(user_id, recipe_id) DO UPDATE SET rating = excluded.rating
+            """,
+            (user_id, recipe_id, rating),
+        )
+        self.conn.commit()
+
+    # ---------- Vorrat / Zuhause ----------
+    def get_user_items(self, table: str, user_id: int) -> list[str]:
+        if table not in {"user_pantry", "user_at_home"}:
+            raise ValueError("Ungültige Tabelle")
+        rows = self.conn.execute(
+            f"SELECT item FROM {table} WHERE user_id = ? ORDER BY item COLLATE NOCASE",
+            (user_id,),
+        ).fetchall()
+        return [row["item"] for row in rows]
+
+    def replace_user_items(self, table: str, user_id: int, items: list[str]) -> None:
+        if table not in {"user_pantry", "user_at_home"}:
+            raise ValueError("Ungültige Tabelle")
+        cleaned = []
+        seen = set()
+        for item in items:
+            value = str(item).strip()
+            key = value.casefold()
+            if value and key not in seen:
+                seen.add(key)
+                cleaned.append(value)
+        with self.conn:
+            self.conn.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
+            self.conn.executemany(
+                f"INSERT INTO {table}(user_id, item) VALUES (?, ?)",
+                [(user_id, item) for item in cleaned],
+            )

@@ -523,17 +523,16 @@
   inset: 0;
   background: rgba(0,0,0,0.45);
   display: flex;
-  justify-content: center;git status
+  justify-content: center;
   align-items: center;
   z-index: 9999;
 }
 
-    .modal.hidden {
-  display: none;
-}
+.modal.hidden { display: none; }
 
 .modal-box {
-  background: white;
+  background: var(--white);
+  color: var(--text);
   padding: 24px;
   border-radius: 20px;
   width: 90%;
@@ -584,6 +583,7 @@
     </div>
     <div class="header-actions">
       <button class="secondary" onclick="showHome()">Startseite</button>
+      <button class="secondary" id="accountButton" onclick="openAccountModal()">👤 Anmelden</button>
       <button class="secondary" onclick="toggleDarkMode()">🌙</button>
     </div>
   </header>
@@ -628,6 +628,8 @@
     let ratings = JSON.parse(localStorage.getItem("ratings") || "{}");
     let recentRecipes = JSON.parse(localStorage.getItem("recentRecipes") || "[]");
     let pantry = JSON.parse(localStorage.getItem("pantry") || "[]");
+    let atHomeIngredients = JSON.parse(localStorage.getItem("atHomeIngredients") || "[]");
+    let currentUser = null;
     let cookSteps = [];
     let recipeScrollPosition = 0;
     let previousView = "recipes";
@@ -639,6 +641,193 @@
 function setWeekSlotFilter(slot){
   selectedWeekSlotFilter = slot;
   loadWeeklyPlan();
+}
+
+async function requestJson(url, options = {}){
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      ...(options.body ? {"Content-Type":"application/json"} : {}),
+      ...(options.headers || {})
+    }
+  });
+
+  let data = null;
+  try{ data = await response.json(); }catch(_){ }
+
+  if(!response.ok){
+    throw new Error(data?.detail || data?.error || `Fehler ${response.status}`);
+  }
+  return data;
+}
+
+function updateAccountButton(){
+  const button = document.getElementById("accountButton");
+  if(!button) return;
+  button.textContent = currentUser ? `👤 ${currentUser.email}` : "👤 Anmelden";
+}
+
+async function initializeAuth(){
+  try{
+    currentUser = await requestJson("/auth/me");
+    await loadUserState();
+  }catch(_){
+    currentUser = null;
+    favorites = JSON.parse(localStorage.getItem("favorites") || "[]").map(Number);
+    ratings = JSON.parse(localStorage.getItem("ratings") || "{}");
+    pantry = JSON.parse(localStorage.getItem("pantry") || "[]");
+    atHomeIngredients = JSON.parse(localStorage.getItem("atHomeIngredients") || "[]");
+  }
+  updateAccountButton();
+}
+
+async function loadUserState(){
+  if(!currentUser) return;
+  const state = await requestJson("/user-state");
+  favorites = (state.favorites || []).map(Number);
+  ratings = state.ratings || {};
+  pantry = state.pantry || [];
+  atHomeIngredients = state.at_home || [];
+}
+
+function openAccountModal(mode = "login"){
+  const modal = document.getElementById("accountModal");
+  const content = document.getElementById("accountModalContent");
+  if(!modal || !content) return;
+
+  if(currentUser){
+    content.innerHTML = `
+      <h2>👤 Mein Konto</h2>
+      <p class="muted">Angemeldet als</p>
+      <p><strong>${escapeHtml(currentUser.email)}</strong></p>
+      <div class="buttons" style="margin-top:18px;">
+        <button class="primary" onclick="showPasswordChange()">Passwort ändern</button>
+        <button class="secondary" onclick="logoutUser()">Abmelden</button>
+        <button class="secondary" onclick="deleteAccount()">Konto löschen</button>
+      </div>`;
+  }else if(mode === "register"){
+    content.innerHTML = `
+      <h2>✨ Konto erstellen</h2>
+      <p class="muted">Speichere Wochenplan, Favoriten und Vorrat geräteübergreifend.</p>
+      <input id="authEmail" type="email" autocomplete="email" placeholder="E-Mail" style="width:100%;margin:10px 0;">
+      <input id="authPassword" type="password" autocomplete="new-password" placeholder="Passwort (mind. 8 Zeichen)" style="width:100%;margin:10px 0;">
+      <button class="primary full-btn" onclick="registerUser()">Registrieren</button>
+      <button class="secondary full-btn" style="margin-top:10px;" onclick="openAccountModal('login')">Schon ein Konto? Anmelden</button>`;
+  }else{
+    content.innerHTML = `
+      <h2>👤 Anmelden</h2>
+      <p class="muted">Deine persönlichen Daten werden deinem Konto zugeordnet.</p>
+      <input id="authEmail" type="email" autocomplete="email" placeholder="E-Mail" style="width:100%;margin:10px 0;">
+      <input id="authPassword" type="password" autocomplete="current-password" placeholder="Passwort" style="width:100%;margin:10px 0;">
+      <button class="primary full-btn" onclick="loginUser()">Anmelden</button>
+      <button class="secondary full-btn" style="margin-top:10px;" onclick="openAccountModal('register')">Konto erstellen</button>`;
+  }
+
+  modal.classList.remove("hidden");
+}
+
+function closeAccountModal(){
+  document.getElementById("accountModal")?.classList.add("hidden");
+}
+
+async function syncGuestStateToAccount(){
+  if(!currentUser) return;
+  const guestFavorites = JSON.parse(localStorage.getItem("favorites") || "[]").map(Number);
+  const guestRatings = JSON.parse(localStorage.getItem("ratings") || "{}");
+  const guestPantry = JSON.parse(localStorage.getItem("pantry") || "[]");
+  const guestAtHome = JSON.parse(localStorage.getItem("atHomeIngredients") || "[]");
+
+  const existing = await requestJson("/user-state");
+  const existingFavs = new Set((existing.favorites || []).map(Number));
+  for(const id of guestFavorites){
+    if(!existingFavs.has(id)){
+      try{ await requestJson(`/favorites/${id}/toggle`, {method:"POST"}); }catch(_){ }
+    }
+  }
+  for(const [id, value] of Object.entries(guestRatings)){
+    if(Number(value) >= 1 && Number(value) <= 5){
+      try{ await requestJson(`/ratings/${Number(id)}`, {method:"PUT", body:JSON.stringify({rating:Number(value)})}); }catch(_){ }
+    }
+  }
+  if(guestPantry.length){
+    await requestJson("/pantry", {method:"PUT", body:JSON.stringify({items:guestPantry})});
+  }
+  if(guestAtHome.length){
+    await requestJson("/at-home", {method:"PUT", body:JSON.stringify({items:guestAtHome})});
+  }
+  await loadUserState();
+}
+
+async function registerUser(){
+  const email = document.getElementById("authEmail")?.value.trim() || "";
+  const password = document.getElementById("authPassword")?.value || "";
+  try{
+    currentUser = await requestJson("/auth/register", {method:"POST", body:JSON.stringify({email,password})});
+    await syncGuestStateToAccount();
+    updateAccountButton();
+    closeAccountModal();
+    showToast("Konto erstellt und angemeldet!");
+    renderHomeSections();
+  }catch(error){ showToast(error.message); }
+}
+
+async function loginUser(){
+  const email = document.getElementById("authEmail")?.value.trim() || "";
+  const password = document.getElementById("authPassword")?.value || "";
+  try{
+    currentUser = await requestJson("/auth/login", {method:"POST", body:JSON.stringify({email,password})});
+    await loadUserState();
+    updateAccountButton();
+    closeAccountModal();
+    showToast("Angemeldet!");
+    renderHomeSections();
+  }catch(error){ showToast(error.message); }
+}
+
+async function logoutUser(){
+  try{ await requestJson("/auth/logout", {method:"POST"}); }catch(_){ }
+  currentUser = null;
+  favorites = JSON.parse(localStorage.getItem("favorites") || "[]").map(Number);
+  ratings = JSON.parse(localStorage.getItem("ratings") || "{}");
+  pantry = JSON.parse(localStorage.getItem("pantry") || "[]");
+  atHomeIngredients = JSON.parse(localStorage.getItem("atHomeIngredients") || "[]");
+  updateAccountButton();
+  closeAccountModal();
+  showToast("Abgemeldet");
+  showHome();
+}
+
+function showPasswordChange(){
+  const content = document.getElementById("accountModalContent");
+  if(!content) return;
+  content.innerHTML = `
+    <h2>🔐 Passwort ändern</h2>
+    <input id="currentPassword" type="password" autocomplete="current-password" placeholder="Aktuelles Passwort" style="width:100%;margin:10px 0;">
+    <input id="newPassword" type="password" autocomplete="new-password" placeholder="Neues Passwort (mind. 8 Zeichen)" style="width:100%;margin:10px 0;">
+    <button class="primary full-btn" onclick="changePassword()">Passwort speichern</button>
+    <button class="secondary full-btn" style="margin-top:10px;" onclick="openAccountModal()">Zurück</button>`;
+}
+
+async function changePassword(){
+  const current_password = document.getElementById("currentPassword")?.value || "";
+  const new_password = document.getElementById("newPassword")?.value || "";
+  try{
+    await requestJson("/auth/password", {method:"POST", body:JSON.stringify({current_password,new_password})});
+    closeAccountModal();
+    showToast("Passwort geändert");
+  }catch(error){ showToast(error.message); }
+}
+
+async function deleteAccount(){
+  if(!confirm("Konto wirklich löschen? Wochenplan, Favoriten, Bewertungen und Vorrat werden dauerhaft gelöscht.")) return;
+  try{
+    await requestJson("/auth/account", {method:"DELETE"});
+    currentUser = null;
+    updateAccountButton();
+    closeAccountModal();
+    showToast("Konto gelöscht");
+    showHome();
+  }catch(error){ showToast(error.message); }
 }
 
     const ingredientAlternatives = {
@@ -1376,37 +1565,23 @@ function drawRouletteRecipe(){
   }, 120);
 }
 
-function recipeMatchesSlot(recipe, slot){
-  const text = [
-    recipe.name || "",
-    recipe.kueche || "",
-    recipe.kategorie || "",
-    ...(recipe.tags || []),
-    ...(recipe.zutaten || [])
-  ].join(" ").toLowerCase();
+  function recipeMatchesSlot(recipe, slot){
+    const text = [
+      recipe.name || "",
+      recipe.kueche || "",
+      recipe.kategorie || "",
+      ...(recipe.tags || []),
+      ...(recipe.zutaten || [])
+    ].join(" ").toLowerCase();
 
-  if(slot.id === 1){
-    return (
-      text.includes("frühstück") ||
-      text.includes("pancake") ||
-      text.includes("waffel") ||
-      text.includes("bowl") ||
-      text.includes("bagel") ||
-      text.includes("brötchen") ||
-      text.includes("brot")
-    );
+    const breakfast = text.includes("frühstück") || text.includes("pancake") || text.includes("waffel") || text.includes("bowl") || text.includes("bagel") || text.includes("brötchen") || text.includes("brot") || text.includes("oats");
+    const dessert = text.includes("dessert") || text.includes("kuchen") || text.includes("süß") || text.includes("pudding");
+
+    if(Number(slot.id) === 1) return breakfast;
+    if(Number(slot.id) === 2) return !breakfast && !dessert;
+    if(Number(slot.id) === 3) return !breakfast && !dessert;
+    return true;
   }
-
-  if(slot.id === 2){
-    return !text.includes("frühstück");
-  }
-
-  if(slot.id === 3){
-    return !text.includes("frühstück");
-  }
-
-  return true;
-}
 
   async function loadWeeklyPlan(){
     setActiveNav("plan");
@@ -1644,7 +1819,7 @@ async function loadShoppingList(){
 
     const data = await response.json();
     const categories = data.categories || {};
-    const atHome = JSON.parse(localStorage.getItem("atHomeIngredients") || "[]")
+    const atHome = (atHomeIngredients || [])
       .map(x => String(x).trim())
       .filter(Boolean);
 
@@ -1703,7 +1878,19 @@ async function loadShoppingList(){
   }
 }
 
-function saveAtHomeIngredients(){const value=document.getElementById("atHomeInput")?.value||"";const items=value.split(/\n|,|;/).map(x=>x.trim()).filter(Boolean);localStorage.setItem("atHomeIngredients",JSON.stringify(items));showToast("Vorhandene Zutaten gespeichert!");loadShoppingList()}
+async function saveAtHomeIngredients(){
+  const value = document.getElementById("atHomeInput")?.value || "";
+  const items = value.split(/\n|,|;/).map(x => x.trim()).filter(Boolean);
+  atHomeIngredients = items;
+  if(currentUser){
+    try{ await requestJson("/at-home", {method:"PUT", body:JSON.stringify({items})}); }
+    catch(error){ return showToast(error.message); }
+  }else{
+    localStorage.setItem("atHomeIngredients", JSON.stringify(items));
+  }
+  showToast("Vorhandene Zutaten gespeichert!");
+  loadShoppingList();
+}
 
 
 function copyShoppingList(){
@@ -1723,7 +1910,16 @@ function copyShoppingList(){
 
 
     function loadFoodRescue(){setActiveNav("rescue");hideHome();document.getElementById("content").innerHTML=`<button class="secondary" onclick="showHome()">← Zurück</button><div class="panel" style="display:grid;gap:16px;margin-top:20px;"><div><span class="hero-badge">♻️ Food Rescue</span><h1>Was hast du noch zuhause?</h1><p class="muted">Gib Lebensmittel ein, die du verwerten möchtest. Die App sucht passende Rezepte.</p></div><textarea id="rescueInput" placeholder="Zum Beispiel:&#10;Sahne&#10;Paprika&#10;Reis&#10;Eier&#10;Käse">${escapeHtml(pantry.join("\n"))}</textarea><div class="buttons"><button class="primary" onclick="findRescueRecipes()">Lebensmittel retten</button><button class="secondary" onclick="savePantry()">Vorrat speichern</button></div></div><div id="rescueResults" style="margin-top:28px;"></div>`}
-    function savePantry(){pantry=document.getElementById("rescueInput").value.split(/\n|,|;/).map(x=>x.trim()).filter(Boolean);localStorage.setItem("pantry",JSON.stringify(pantry));showToast("Vorrat gespeichert!")}
+    async function savePantry(){
+      pantry = document.getElementById("rescueInput").value.split(/\n|,|;/).map(x=>x.trim()).filter(Boolean);
+      if(currentUser){
+        try{ await requestJson("/pantry", {method:"PUT", body:JSON.stringify({items:pantry})}); }
+        catch(error){ return showToast(error.message); }
+      }else{
+        localStorage.setItem("pantry", JSON.stringify(pantry));
+      }
+      showToast("Vorrat gespeichert!");
+    }
 
     async function findRescueRecipes(){
   const input = document.getElementById("rescueInput").value;
@@ -1942,7 +2138,22 @@ function closePlanModal(){
 }
   
 
-    function toggleFavorite(id){id=Number(id);if(favorites.includes(id)){favorites=favorites.filter(f=>Number(f)!==id);showToast("Aus Favoriten entfernt")}else{favorites.push(id);showToast("Zu Favoriten hinzugefügt")}localStorage.setItem("favorites",JSON.stringify(favorites));if(document.getElementById("recipeGrid"))renderRecipes();if(!document.getElementById("home").classList.contains("hidden"))renderHomeSections()}
+    async function toggleFavorite(id){
+      id = Number(id);
+      if(currentUser){
+        try{
+          const data = await requestJson(`/favorites/${id}/toggle`, {method:"POST"});
+          favorites = (data.ids || []).map(Number);
+          showToast(data.favorite ? "Zu Favoriten hinzugefügt" : "Aus Favoriten entfernt");
+        }catch(error){ return showToast(error.message); }
+      }else{
+        if(favorites.includes(id)){favorites=favorites.filter(f=>Number(f)!==id);showToast("Aus Favoriten entfernt")}
+        else{favorites.push(id);showToast("Zu Favoriten hinzugefügt")}
+        localStorage.setItem("favorites",JSON.stringify(favorites));
+      }
+      if(document.getElementById("recipeGrid")) renderRecipes();
+      if(!document.getElementById("home").classList.contains("hidden")) renderHomeSections();
+    }
     function isFavorite(id){return favorites.includes(Number(id))}
 
     async function loadFavorites(){setActiveNav("favorites");hideHome();await ensureRecipesLoaded();const fav=allRecipes.filter(r=>isFavorite(r.id));document.getElementById("content").innerHTML=`<button class="secondary" onclick="showHome()">← Zurück</button><h2>❤️ Deine Favoriten</h2>${fav.length?`<div class="grid" id="recipeGrid">${fav.map(recipeCard).join("")}</div>`:`<div class="empty-state"><h2>❤️ Noch keine Favoriten</h2><p>Speichere dein erstes Lieblingsrezept.</p><button class="primary" onclick="loadRecipes()">Rezepte entdecken</button></div>`}`}
@@ -1951,7 +2162,17 @@ function closePlanModal(){
     function loadRecentRecipes(){setActiveNav("recent");hideHome();document.getElementById("content").innerHTML=`<button class="secondary" onclick="showHome()">← Zurück</button><h2>🕘 Zuletzt angesehen</h2>${recentRecipes.length?`<div class="grid">${recentRecipes.map(recipeCard).join("")}</div>`:`<div class="empty-state"><h2>🕘 Noch keine zuletzt angesehenen Rezepte</h2><p>Öffne ein Rezept, dann erscheint es hier.</p><button class="primary" onclick="loadRecipes()">Rezepte entdecken</button></div>`}`}
 
     function ratingStars(id){const current=ratings[id]||0;return `<div class="rating">${[1,2,3,4,5].map(s=>`<button onclick="setRating(${id},${s})">${s<=current?"⭐":"☆"}</button>`).join("")}</div>`}
-    function setRating(id,value){ratings[id]=value;localStorage.setItem("ratings",JSON.stringify(ratings));showToast("Bewertung gespeichert!");showRecipe(id)}
+    async function setRating(id,value){
+      ratings[id] = value;
+      if(currentUser){
+        try{ await requestJson(`/ratings/${Number(id)}`, {method:"PUT", body:JSON.stringify({rating:Number(value)})}); }
+        catch(error){ return showToast(error.message); }
+      }else{
+        localStorage.setItem("ratings", JSON.stringify(ratings));
+      }
+      showToast("Bewertung gespeichert!");
+      showRecipe(id);
+    }
 
     async function shareRecipe(id){
   await ensureRecipesLoaded();
@@ -2013,6 +2234,12 @@ function closePlanModal(){
     if(localStorage.getItem("darkMode")==="true")document.body.classList.add("dark");
 
     async function initializeApp(){
+      try{
+        await initializeAuth();
+      }catch(error){
+        console.error("Auth-Start fehlgeschlagen:", error);
+      }
+
       showHome();
 
       try{
@@ -2055,6 +2282,15 @@ function closePlanModal(){
     <div style="margin-top:20px;">
       <button class="secondary" onclick="closePlanModal()">Abbrechen</button>
     </div>
+  </div>
+</div>
+
+<div id="accountModal" class="modal hidden" onclick="if(event.target===this) closeAccountModal()">
+  <div class="modal-box">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+      <button class="secondary" onclick="closeAccountModal()">✕</button>
+    </div>
+    <div id="accountModalContent"></div>
   </div>
 </div>
 </body>

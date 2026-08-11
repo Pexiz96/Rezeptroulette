@@ -1,8 +1,13 @@
 import os
 import random
+import base64
+import hashlib
+import hmac
+import secrets
+from datetime import datetime, timedelta, timezone
 from dataclasses import asdict
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -129,6 +134,24 @@ class WeeklyPlanBulk(BaseModel):
     entries: list[WeeklyPlanEntry] = Field(default_factory=list)
 
 
+class AuthCredentials(BaseModel):
+    email: str
+    password: str
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class RatingPayload(BaseModel):
+    rating: int = Field(ge=1, le=5)
+
+
+class ItemsPayload(BaseModel):
+    items: list[str] = Field(default_factory=list)
+
+
 app = FastAPI()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -146,9 +169,230 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+SESSION_COOKIE = "rr_session"
+SESSION_DAYS = 30
+PBKDF2_ITERATIONS = 310_000
+
 
 def get_db():
     return Database()
+
+
+def normalize_email(email: str) -> str:
+    return str(email or "").strip().lower()
+
+
+def validate_email(email: str) -> str:
+    email = normalize_email(email)
+    if len(email) > 254 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+        raise HTTPException(status_code=400, detail="Bitte eine gültige E-Mail-Adresse eingeben")
+    return email
+
+
+def validate_password(password: str) -> str:
+    password = str(password or "")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Das Passwort muss mindestens 8 Zeichen lang sein")
+    if len(password) > 256:
+        raise HTTPException(status_code=400, detail="Das Passwort ist zu lang")
+    return password
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
+    return "pbkdf2_sha256${}${}${}".format(
+        PBKDF2_ITERATIONS,
+        base64.urlsafe_b64encode(salt).decode("ascii"),
+        base64.urlsafe_b64encode(digest).decode("ascii"),
+    )
+
+
+def verify_password(password: str, stored: str) -> bool:
+    try:
+        algorithm, iterations, salt_b64, digest_b64 = stored.split("$", 3)
+        if algorithm != "pbkdf2_sha256":
+            return False
+        salt = base64.urlsafe_b64decode(salt_b64.encode("ascii"))
+        expected = base64.urlsafe_b64decode(digest_b64.encode("ascii"))
+        actual = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, int(iterations))
+        return hmac.compare_digest(actual, expected)
+    except Exception:
+        return False
+
+
+def token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def is_https(request: Request) -> bool:
+    forwarded = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+    return forwarded == "https" or request.url.scheme == "https"
+
+
+def set_session_cookie(response: Response, request: Request, token: str) -> None:
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=token,
+        max_age=SESSION_DAYS * 24 * 60 * 60,
+        httponly=True,
+        secure=is_https(request),
+        samesite="lax",
+        path="/",
+    )
+
+
+def optional_user(request: Request):
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token:
+        return None
+    db = get_db()
+    return db.get_session_user(token_hash(token), now_utc().isoformat())
+
+
+def require_user(request: Request):
+    user = optional_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Bitte zuerst anmelden")
+    return user
+
+@app.post("/auth/register")
+def register(credentials: AuthCredentials, request: Request, response: Response):
+    email = validate_email(credentials.email)
+    password = validate_password(credentials.password)
+    db = get_db()
+    if db.get_user_by_email(email):
+        raise HTTPException(status_code=409, detail="Für diese E-Mail gibt es bereits ein Konto")
+    try:
+        user_id = db.create_user(email, hash_password(password))
+    except Exception as exc:
+        if "UNIQUE constraint failed" in str(exc):
+            raise HTTPException(status_code=409, detail="Für diese E-Mail gibt es bereits ein Konto")
+        raise
+    token = secrets.token_urlsafe(32)
+    expires = now_utc() + timedelta(days=SESSION_DAYS)
+    db.create_session(user_id, token_hash(token), expires.isoformat())
+    set_session_cookie(response, request, token)
+    return {"id": user_id, "email": email}
+
+
+@app.post("/auth/login")
+def login(credentials: AuthCredentials, request: Request, response: Response):
+    email = validate_email(credentials.email)
+    db = get_db()
+    user = db.get_user_by_email(email)
+    if not user or not verify_password(credentials.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="E-Mail oder Passwort ist falsch")
+    token = secrets.token_urlsafe(32)
+    expires = now_utc() + timedelta(days=SESSION_DAYS)
+    db.create_session(int(user["id"]), token_hash(token), expires.isoformat())
+    set_session_cookie(response, request, token)
+    return {"id": int(user["id"]), "email": user["email"]}
+
+
+@app.post("/auth/logout")
+def logout(request: Request, response: Response):
+    token = request.cookies.get(SESSION_COOKIE)
+    if token:
+        get_db().delete_session(token_hash(token))
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return {"ok": True}
+
+
+@app.get("/auth/me")
+def me(user=Depends(require_user)):
+    return {"id": int(user["id"]), "email": user["email"], "created_at": user["created_at"]}
+
+
+@app.post("/auth/password")
+def change_password(payload: PasswordChange, request: Request, response: Response, user=Depends(require_user)):
+    db = get_db()
+    full_user = db.get_user(int(user["id"]))
+    if not full_user or not verify_password(payload.current_password, full_user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Aktuelles Passwort ist falsch")
+    new_password = validate_password(payload.new_password)
+    db.update_user_password(int(user["id"]), hash_password(new_password))
+    token = secrets.token_urlsafe(32)
+    expires = now_utc() + timedelta(days=SESSION_DAYS)
+    db.create_session(int(user["id"]), token_hash(token), expires.isoformat())
+    set_session_cookie(response, request, token)
+    return {"ok": True}
+
+
+@app.delete("/auth/account")
+def delete_account(request: Request, response: Response, user=Depends(require_user)):
+    get_db().delete_user(int(user["id"]))
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return {"ok": True}
+
+
+@app.get("/user-state")
+def user_state(user=Depends(require_user)):
+    db = get_db()
+    uid = int(user["id"])
+    return {
+        "favorites": db.favorite_ids(uid),
+        "ratings": db.ratings(uid),
+        "pantry": db.get_user_items("user_pantry", uid),
+        "at_home": db.get_user_items("user_at_home", uid),
+    }
+
+
+@app.get("/favorites")
+def get_favorites(user=Depends(require_user)):
+    return {"ids": get_db().favorite_ids(int(user["id"]))}
+
+
+@app.post("/favorites/{recipe_id}/toggle")
+def toggle_favorite(recipe_id: int, user=Depends(require_user)):
+    db = get_db()
+    if not db.get_recipe(recipe_id):
+        raise HTTPException(status_code=404, detail="Rezept nicht gefunden")
+    favorite = db.toggle_user_favorite(int(user["id"]), recipe_id)
+    return {"favorite": favorite, "ids": db.favorite_ids(int(user["id"]))}
+
+
+@app.get("/ratings")
+def get_ratings(user=Depends(require_user)):
+    return get_db().ratings(int(user["id"]))
+
+
+@app.put("/ratings/{recipe_id}")
+def put_rating(recipe_id: int, payload: RatingPayload, user=Depends(require_user)):
+    db = get_db()
+    if not db.get_recipe(recipe_id):
+        raise HTTPException(status_code=404, detail="Rezept nicht gefunden")
+    db.set_rating(int(user["id"]), recipe_id, payload.rating)
+    return {"ok": True, "rating": payload.rating}
+
+
+@app.get("/pantry")
+def get_pantry(user=Depends(require_user)):
+    return {"items": get_db().get_user_items("user_pantry", int(user["id"]))}
+
+
+@app.put("/pantry")
+def put_pantry(payload: ItemsPayload, user=Depends(require_user)):
+    db = get_db()
+    db.replace_user_items("user_pantry", int(user["id"]), payload.items)
+    return {"items": db.get_user_items("user_pantry", int(user["id"]))}
+
+
+@app.get("/at-home")
+def get_at_home(user=Depends(require_user)):
+    return {"items": get_db().get_user_items("user_at_home", int(user["id"]))}
+
+
+@app.put("/at-home")
+def put_at_home(payload: ItemsPayload, user=Depends(require_user)):
+    db = get_db()
+    db.replace_user_items("user_at_home", int(user["id"]), payload.items)
+    return {"items": db.get_user_items("user_at_home", int(user["id"]))}
+
 
 @app.delete("/delete-pdf-recipes")
 def delete_pdf_recipes():
@@ -258,30 +502,40 @@ def validate_plan_target(day: str, slot: int) -> None:
 
 
 @app.get("/wochenplan")
-def wochenplan():
+def wochenplan(request: Request):
     db = get_db()
-    return db.weekly_plan()
+    user = optional_user(request)
+    return db.user_weekly_plan(int(user["id"])) if user else db.weekly_plan()
 
 
 @app.post("/wochenplan/reset")
-def reset_wochenplan():
+def reset_wochenplan(request: Request):
     db = get_db()
-    db.reset_weekly_plan()
+    user = optional_user(request)
+    if user:
+        db.reset_user_weekly_plan(int(user["id"]))
+    else:
+        db.reset_weekly_plan()
     return {"message": "Wochenplan geleert"}
 
 
 @app.post("/wochenplan/clear/{day}")
-def loesche_tag(day: str):
+def loesche_tag(day: str, request: Request):
     if day not in VALID_DAYS:
         raise HTTPException(status_code=400, detail="Ungültiger Wochentag")
 
     db = get_db()
-    db.set_weekly_plan_bulk([(day, slot, None) for slot in (1, 2, 3)])
+    user = optional_user(request)
+    entries = [(day, slot, None) for slot in (1, 2, 3)]
+    if user:
+        db.set_user_weekly_plan_bulk(int(user["id"]), entries)
+    else:
+        db.set_weekly_plan_bulk(entries)
     return {"message": f"{day} wurde gelöscht"}
 
 
 @app.post("/wochenplan/bulk")
-def set_weekly_plan_bulk(payload: WeeklyPlanBulk):
+def set_weekly_plan_bulk(payload: WeeklyPlanBulk, request: Request):
     db = get_db()
     entries = []
 
@@ -296,19 +550,27 @@ def set_weekly_plan_bulk(payload: WeeklyPlanBulk):
 
         entries.append((entry.day, entry.slot, recipe_id))
 
-    db.set_weekly_plan_bulk(entries)
+    user = optional_user(request)
+    if user:
+        db.set_user_weekly_plan_bulk(int(user["id"]), entries)
+    else:
+        db.set_weekly_plan_bulk(entries)
     return {"ok": True, "saved": len(entries)}
 
 
 @app.post("/wochenplan/{day}/{slot}/{recipe_id}")
-def set_weekly_plan(day: str, slot: int, recipe_id: int):
+def set_weekly_plan(day: str, slot: int, recipe_id: int, request: Request):
     validate_plan_target(day, slot)
     db = get_db()
 
     if recipe_id != 0 and not db.get_recipe(recipe_id):
         raise HTTPException(status_code=404, detail="Rezept nicht gefunden")
 
-    db.set_weekly_plan_slot(day, slot, recipe_id)
+    user = optional_user(request)
+    if user:
+        db.set_user_weekly_plan_slot(int(user["id"]), day, slot, recipe_id)
+    else:
+        db.set_weekly_plan_slot(day, slot, recipe_id)
     return {"ok": True}
 
 def parse_ingredient(text):
@@ -612,9 +874,10 @@ def shopping_list(recipes):
 
 
 @app.get("/einkaufsliste")
-def einkaufsliste():
+def einkaufsliste(request: Request):
     db = get_db()
-    plan = db.weekly_plan()
+    user = optional_user(request)
+    plan = db.user_weekly_plan(int(user["id"])) if user else db.weekly_plan()
 
     recipes = []
 
