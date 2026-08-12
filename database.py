@@ -206,7 +206,15 @@ class Database:
         IMAGE_DIR.mkdir(parents=True, exist_ok=True)
         LOCAL_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
-        self.conn = sqlite3.connect(self.path)
+        self.conn = sqlite3.connect(
+            self.path,
+            timeout=30,
+            check_same_thread=False
+        )
+
+        self.conn.execute("PRAGMA foreign_keys = ON")
+        self.conn.execute("PRAGMA journal_mode = WAL")
+        self.conn.execute("PRAGMA busy_timeout = 30000")
         self.conn.row_factory = sqlite3.Row
 
         self.init_schema()
