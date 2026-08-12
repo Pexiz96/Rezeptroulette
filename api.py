@@ -155,6 +155,9 @@ class ItemsPayload(BaseModel):
 
 app = FastAPI()
 
+startup_db = Database(initialize=True)
+startup_db.conn.close()
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 BILDER_DIR = os.path.join(BASE_DIR, "bilder")
@@ -176,8 +179,7 @@ PBKDF2_ITERATIONS = 310_000
 
 
 def get_db():
-    return Database()
-
+    return Database(initialize=False)
 
 def normalize_email(email: str) -> str:
     return str(email or "").strip().lower()

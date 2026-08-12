@@ -200,7 +200,7 @@ def external_recipe_rows() -> list[tuple]:
     return rows
 
 class Database:
-    def __init__(self, path: Path = DB_PATH):
+    def __init__(self, path: Path = DB_PATH, initialize: bool = True):
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
         IMAGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -217,10 +217,11 @@ class Database:
         self.conn.execute("PRAGMA busy_timeout = 30000")
         self.conn.row_factory = sqlite3.Row
 
-        self.init_schema()
-        self.seed_if_empty()
-        self.import_builtin_recipes()
-        self.import_external_recipes()
+        if initialize:
+            self.init_schema()
+            self.seed_if_empty()
+            self.import_builtin_recipes()
+            self.import_external_recipes()
 
     def init_schema(self) -> None:
         self.conn.execute("PRAGMA foreign_keys = ON")
