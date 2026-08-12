@@ -1,11 +1,148 @@
-import json
-import sqlite3
-from pathlib import Path
+from __future__ import annotations
 
+import json
+import os
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from sqlalchemy import (
+    MetaData, Table, Column, Integer, String, Text, LargeBinary, ForeignKey,
+    CheckConstraint, UniqueConstraint, Index, create_engine, select, insert,
+    update, delete, and_, or_, inspect, text as sql_text
+)
+from sqlalchemy.engine import Engine
+from sqlalchemy import event
+
+try:
+    from config import DB_PATH as CONFIG_DB_PATH, DAYS as CONFIG_DAYS
+except Exception:
+    CONFIG_DB_PATH = Path("rezeptfinder.sqlite3")
+    CONFIG_DAYS = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"]
+
+DAYS = list(CONFIG_DAYS)
 DATA_RECIPE_PATH = Path("data/recipes.json")
 
-from config import DB_PATH, IMAGE_DIR, LOCAL_IMAGE_DIR, DAYS
-from models import Rezept
+
+def _normalize_database_url(raw: str | None) -> str:
+    value = (raw or "").strip()
+    if value.startswith("postgres://"):
+        value = "postgresql+psycopg://" + value[len("postgres://"):]
+    elif value.startswith("postgresql://"):
+        value = "postgresql+psycopg://" + value[len("postgresql://"):]
+    if value.startswith(("postgresql+psycopg://", "sqlite://")):
+        return value
+    path = Path(CONFIG_DB_PATH)
+    return f"sqlite:///{path.as_posix()}"
+
+
+DATABASE_URL = _normalize_database_url(os.getenv("DATABASE_URL"))
+metadata = MetaData()
+
+users = Table(
+    "users", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("username", String(40), nullable=False),
+    Column("email", String(254), nullable=False),
+    Column("password_hash", Text, nullable=False),
+    Column("display_name", String(80), nullable=False, server_default=""),
+    Column("bio", String(280), nullable=False, server_default=""),
+    Column("avatar_mime", String(100), nullable=True),
+    Column("avatar_data", LargeBinary, nullable=True),
+    Column("created_at", String(40), nullable=False),
+    Column("updated_at", String(40), nullable=False),
+    UniqueConstraint("username", name="uq_users_username"),
+    UniqueConstraint("email", name="uq_users_email"),
+)
+
+recipes = Table(
+    "recipes", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("name", String(240), nullable=False),
+    Column("kueche", String(120), nullable=False, server_default="Unbekannt"),
+    Column("bild", Text, nullable=False, server_default=""),
+    Column("portionen", Integer, nullable=False, server_default="2"),
+    Column("kochzeit", Integer, nullable=False, server_default="30"),
+    Column("schwierigkeit", String(40), nullable=False, server_default="Einfach"),
+    Column("tags_json", Text, nullable=False, server_default="[]"),
+    Column("zutaten_json", Text, nullable=False, server_default="[]"),
+    Column("anleitung", Text, nullable=False, server_default=""),
+    Column("description", Text, nullable=False, server_default=""),
+    Column("owner_user_id", Integer, nullable=True),
+    Column("source_url", Text, nullable=True),
+    Column("created_at", String(40), nullable=False, server_default=""),
+)
+
+sessions = Table(
+    "sessions", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("token_hash", String(64), nullable=False, unique=True),
+    Column("expires_at", String(40), nullable=False),
+    Column("created_at", String(40), nullable=False),
+)
+
+weekly_plan = Table(
+    "weekly_plan", metadata,
+    Column("day", String(20), primary_key=True),
+    Column("slot", Integer, primary_key=True),
+    Column("recipe_id", Integer, nullable=True),
+    CheckConstraint("slot BETWEEN 1 AND 3", name="ck_weekly_plan_slot"),
+)
+
+user_weekly_plan = Table(
+    "user_weekly_plan", metadata,
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("day", String(20), primary_key=True),
+    Column("slot", Integer, primary_key=True),
+    Column("recipe_id", Integer, nullable=True),
+    CheckConstraint("slot BETWEEN 1 AND 3", name="ck_user_weekly_plan_slot"),
+)
+
+user_favorites = Table(
+    "user_favorites", metadata,
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("recipe_id", Integer, primary_key=True),
+)
+
+user_ratings = Table(
+    "user_ratings", metadata,
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("recipe_id", Integer, primary_key=True),
+    Column("rating", Integer, nullable=False),
+    CheckConstraint("rating BETWEEN 1 AND 5", name="ck_user_rating"),
+)
+
+user_pantry = Table(
+    "user_pantry", metadata,
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("item", String(240), primary_key=True),
+)
+
+user_at_home = Table(
+    "user_at_home", metadata,
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("item", String(240), primary_key=True),
+)
+
+user_eaten = Table(
+    "user_eaten", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+    Column("recipe_id", Integer, nullable=False),
+    Column("eaten_at", String(40), nullable=False),
+)
+
+user_preferences = Table(
+    "user_preferences", metadata,
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("preferences_json", Text, nullable=False, server_default="{}"),
+)
+
+Index("ix_sessions_token_hash", sessions.c.token_hash)
+Index("ix_sessions_expires_at", sessions.c.expires_at)
+Index("ix_eaten_user_date", user_eaten.c.user_id, user_eaten.c.eaten_at)
 
 
 BUILTIN_RECIPE_TEXT = """
@@ -132,693 +269,560 @@ Käsebrezel|Snack|kaesebrezel.png|2|10|Einfach|Snack,Schnell,Herzhaft|2 Brezeln;
 """
 
 
+def utc_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
-
-def builtin_recipe_rows() -> list[tuple]:
-    rows = []
-    seen = set()
-
-    for line in BUILTIN_RECIPE_TEXT.strip().splitlines():
-        line = line.strip()
+def builtin_recipe_rows() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in BUILTIN_RECIPE_TEXT.strip().splitlines():
+        line = raw.strip()
         if not line or line.startswith("#"):
             continue
-
         parts = line.split("|")
         if len(parts) != 9:
-            print("Überspringe ungültige Rezeptzeile:", line[:80])
             continue
-
         name, kueche, bild, portionen, kochzeit, schwierigkeit, tags, zutaten, anleitung = parts
-
-        if name in seen:
+        name = name.strip()
+        if not name or name.casefold() in seen:
             continue
-        seen.add(name)
-
+        seen.add(name.casefold())
         try:
-            portionen_int = int(portionen)
+            portions = max(1, int(portionen))
         except Exception:
-            portionen_int = 2
-
+            portions = 2
         try:
-            kochzeit_int = int(kochzeit)
+            minutes = max(1, int(kochzeit))
         except Exception:
-            kochzeit_int = 30
-
-        rows.append((name.strip(), kueche.strip() or "Unbekannt", bild.strip(), max(1, portionen_int), max(1, kochzeit_int), schwierigkeit.strip() or "Einfach",
-                     [tag.strip() for tag in tags.split(",") if tag.strip()], [zutat.strip() for zutat in zutaten.split(";") if zutat.strip()],
-                     anleitung.replace("\\n", "\n").strip() or "Keine Anleitung vorhanden."))
-
+            minutes = 30
+        tag_list = [x.strip() for x in tags.split(",") if x.strip()]
+        ingredient_list = [x.strip() for x in zutaten.split(";") if x.strip()]
+        description = _default_description(name, minutes, portions, tag_list)
+        rows.append({
+            "name": name,
+            "kueche": kueche.strip() or "Unbekannt",
+            "bild": bild.strip(),
+            "portionen": portions,
+            "kochzeit": minutes,
+            "schwierigkeit": schwierigkeit.strip() or "Einfach",
+            "tags_json": json.dumps(tag_list, ensure_ascii=False),
+            "zutaten_json": json.dumps(ingredient_list, ensure_ascii=False),
+            "anleitung": anleitung.replace("\\n", "\n").strip() or "Keine Anleitung vorhanden.",
+            "description": description,
+            "owner_user_id": None,
+            "source_url": None,
+            "created_at": utc_iso(),
+        })
     return rows
 
-def external_recipe_rows() -> list[tuple]:
+
+def external_recipe_rows() -> list[dict[str, Any]]:
     if not DATA_RECIPE_PATH.exists():
         return []
-
-    with DATA_RECIPE_PATH.open("r", encoding="utf-8") as file:
-        data = json.load(file)
-
-    rows = []
-
-    for item in data:
+    try:
+        data = json.loads(DATA_RECIPE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in data if isinstance(data, list) else []:
         name = str(item.get("name", "")).strip()
         if not name:
             continue
-
-        rows.append((
-            name,
-            str(item.get("kueche", "Unbekannt")).strip() or "Unbekannt",
-            str(item.get("bild", "")).strip(),
-            max(1, int(item.get("portionen", 2) or 2)),
-            max(1, int(item.get("kochzeit", 30) or 30)),
-            str(item.get("schwierigkeit", "Einfach")).strip() or "Einfach",
-            item.get("tags", []) if isinstance(item.get("tags", []), list) else [],
-            item.get("zutaten", []) if isinstance(item.get("zutaten", []), list) else [],
-            str(item.get("anleitung", "")).strip() or "Keine Anleitung vorhanden."
-        ))
-
+        tags = item.get("tags", []) if isinstance(item.get("tags"), list) else []
+        ingredients = item.get("zutaten", []) if isinstance(item.get("zutaten"), list) else []
+        try:
+            portions = max(1, int(item.get("portionen", 2) or 2))
+        except Exception:
+            portions = 2
+        try:
+            minutes = max(1, int(item.get("kochzeit", 30) or 30))
+        except Exception:
+            minutes = 30
+        rows.append({
+            "name": name,
+            "kueche": str(item.get("kueche", "Unbekannt")).strip() or "Unbekannt",
+            "bild": str(item.get("bild", "")).strip(),
+            "portionen": portions,
+            "kochzeit": minutes,
+            "schwierigkeit": str(item.get("schwierigkeit", "Einfach")).strip() or "Einfach",
+            "tags_json": json.dumps(tags, ensure_ascii=False),
+            "zutaten_json": json.dumps(ingredients, ensure_ascii=False),
+            "anleitung": str(item.get("anleitung", "")).strip() or "Keine Anleitung vorhanden.",
+            "description": str(item.get("description", "")).strip() or _default_description(name, minutes, portions, tags),
+            "owner_user_id": None,
+            "source_url": None,
+            "created_at": utc_iso(),
+        })
     return rows
 
+
+def _default_description(name: str, minutes: int, portions: int, tags: list[str]) -> str:
+    tag_text = ", ".join(tags[:3])
+    base = f"{name} – ein Rezept für {portions} Portionen, das in etwa {minutes} Minuten zubereitet ist."
+    return f"{base} Passt besonders zu: {tag_text}." if tag_text else base
+
+
+def _safe_json(value: Any, fallback: Any) -> Any:
+    if isinstance(value, (list, dict)):
+        return value
+    try:
+        return json.loads(value or "")
+    except Exception:
+        return fallback
+
+
 class Database:
-    def __init__(self, path: Path = DB_PATH, initialize: bool = True):
-        self.path = path
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-        LOCAL_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    """SQLAlchemy-Core Datenzugriff.
 
-        self.conn = sqlite3.connect(
-            self.path,
-            timeout=30,
-            check_same_thread=False
+    Nutzt DATABASE_URL (PostgreSQL auf Render) wenn vorhanden.
+    Lokal fällt die App automatisch auf SQLite zurück.
+    Jede Operation öffnet nur kurz eine Verbindung; dadurch entstehen keine
+    langlebigen SQLite-Verbindungen und deutlich weniger Lock-Probleme.
+    """
+
+    def __init__(self, initialize: bool = False):
+        connect_args: dict[str, Any] = {}
+        if DATABASE_URL.startswith("sqlite://"):
+            connect_args = {"timeout": 30, "check_same_thread": False}
+        self.engine: Engine = create_engine(
+            DATABASE_URL,
+            future=True,
+            pool_pre_ping=True,
+            connect_args=connect_args,
         )
-
-        self.conn.execute("PRAGMA foreign_keys = ON")
-        self.conn.execute("PRAGMA journal_mode = WAL")
-        self.conn.execute("PRAGMA busy_timeout = 30000")
-        self.conn.row_factory = sqlite3.Row
-
+        if DATABASE_URL.startswith("sqlite://"):
+            @event.listens_for(self.engine, "connect")
+            def _set_sqlite_pragmas(dbapi_connection, _):
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+                cursor.execute("PRAGMA busy_timeout=30000")
+                cursor.close()
         if initialize:
             self.init_schema()
-            self.seed_if_empty()
-            self.import_builtin_recipes()
-            self.import_external_recipes()
+
+    @property
+    def dialect(self) -> str:
+        return self.engine.dialect.name
 
     def init_schema(self) -> None:
-        self.conn.execute("PRAGMA foreign_keys = ON")
+        # Bestehende alte SQLite-Tabellen werden zuerst minimal migriert,
+        # danach kann SQLAlchemy neue Tabellen sicher anlegen.
+        self._migrate_legacy_tables()
+        metadata.create_all(self.engine)
+        self._migrate_columns()
+        self._ensure_guest_week()
+        self.sync_builtin_recipes()
+        self.sync_external_recipes()
 
-        self.conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS recipes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
-                kueche TEXT NOT NULL DEFAULT 'Unbekannt',
-                bild TEXT NOT NULL DEFAULT '',
-                portionen INTEGER NOT NULL DEFAULT 2,
-                kochzeit INTEGER NOT NULL DEFAULT 30,
-                schwierigkeit TEXT NOT NULL DEFAULT 'Einfach',
-                tags_json TEXT NOT NULL DEFAULT '[]',
-                favorit INTEGER NOT NULL DEFAULT 0,
-                zutaten_json TEXT NOT NULL DEFAULT '[]',
-                anleitung TEXT NOT NULL DEFAULT ''
-            )
-            """
-        )
+    def _table_exists(self, name: str) -> bool:
+        return name in inspect(self.engine).get_table_names()
 
-        # Migration: ältere Versionen hatten nur day + recipe_id.
-        # CREATE TABLE IF NOT EXISTS würde diese Tabelle nicht aktualisieren.
-        table_exists = self.conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='weekly_plan'"
-        ).fetchone()
-
-        if table_exists:
-            info = self.conn.execute("PRAGMA table_info(weekly_plan)").fetchall()
-            columns = {row["name"] for row in info}
-            pk_columns = [
-                row["name"]
-                for row in sorted(info, key=lambda r: r["pk"] or 999)
-                if row["pk"]
-            ]
-
-            needs_migration = "slot" not in columns or pk_columns != ["day", "slot"]
-
-            if needs_migration:
-                self.conn.execute("ALTER TABLE weekly_plan RENAME TO weekly_plan_legacy")
-                self.conn.execute(
-                    """
-                    CREATE TABLE weekly_plan (
-                        day TEXT NOT NULL,
-                        slot INTEGER NOT NULL CHECK(slot BETWEEN 1 AND 3),
-                        recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
-                        PRIMARY KEY(day, slot)
-                    )
-                    """
-                )
-
-                legacy_columns = {
-                    row["name"]
-                    for row in self.conn.execute("PRAGMA table_info(weekly_plan_legacy)").fetchall()
-                }
-
-                # Alte Einzelrezepte werden als Mittagessen (Slot 2) übernommen.
-                if {"day", "recipe_id"}.issubset(legacy_columns):
-                    if "slot" in legacy_columns:
-                        self.conn.execute(
-                            """
-                            INSERT OR IGNORE INTO weekly_plan(day, slot, recipe_id)
-                            SELECT day,
-                                   CASE WHEN slot BETWEEN 1 AND 3 THEN slot ELSE 2 END,
-                                   recipe_id
-                            FROM weekly_plan_legacy
-                            """
-                        )
-                    else:
-                        self.conn.execute(
-                            """
-                            INSERT OR IGNORE INTO weekly_plan(day, slot, recipe_id)
-                            SELECT day, 2, recipe_id
-                            FROM weekly_plan_legacy
-                            """
-                        )
-
-                self.conn.execute("DROP TABLE weekly_plan_legacy")
-        else:
-            self.conn.execute(
-                """
-                CREATE TABLE weekly_plan (
-                    day TEXT NOT NULL,
-                    slot INTEGER NOT NULL CHECK(slot BETWEEN 1 AND 3),
-                    recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
-                    PRIMARY KEY(day, slot)
-                )
-                """
-            )
-
-        for day in DAYS:
-            for slot in range(1, 4):
-                self.conn.execute(
-                    "INSERT OR IGNORE INTO weekly_plan(day, slot, recipe_id) VALUES (?, ?, NULL)",
-                    (day, slot),
-                )
-
-        # Benutzerkonten und benutzerspezifische Daten.
-        self.conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email TEXT NOT NULL UNIQUE COLLATE NOCASE,
-                password_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                token_hash TEXT NOT NULL UNIQUE,
-                expires_at TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-
-            CREATE TABLE IF NOT EXISTS user_weekly_plan (
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                day TEXT NOT NULL,
-                slot INTEGER NOT NULL CHECK(slot BETWEEN 1 AND 3),
-                recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
-                PRIMARY KEY(user_id, day, slot)
-            );
-
-            CREATE TABLE IF NOT EXISTS user_favorites (
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
-                PRIMARY KEY(user_id, recipe_id)
-            );
-
-            CREATE TABLE IF NOT EXISTS user_ratings (
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
-                rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
-                PRIMARY KEY(user_id, recipe_id)
-            );
-
-            CREATE TABLE IF NOT EXISTS user_pantry (
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                item TEXT NOT NULL,
-                PRIMARY KEY(user_id, item)
-            );
-
-            CREATE TABLE IF NOT EXISTS user_at_home (
-                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                item TEXT NOT NULL,
-                PRIMARY KEY(user_id, item)
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_sessions_token_hash ON sessions(token_hash);
-            CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
-            """
-        )
-
-        self.conn.commit()
-
-    def seed_if_empty(self) -> None:
-        count = self.conn.execute("SELECT COUNT(*) FROM recipes").fetchone()[0]
-
-        if count:
+    def _migrate_legacy_tables(self) -> None:
+        if not self._table_exists("weekly_plan"):
             return
+        cols = {c["name"] for c in inspect(self.engine).get_columns("weekly_plan")}
+        if "slot" in cols:
+            return
+        # Alte Tabelle day + recipe_id in neue 3-Slot-Struktur umwandeln.
+        with self.engine.begin() as conn:
+            conn.execute(sql_text("ALTER TABLE weekly_plan RENAME TO weekly_plan_legacy"))
+        metadata.tables["weekly_plan"].create(self.engine, checkfirst=True)
+        with self.engine.begin() as conn:
+            rows = conn.execute(sql_text("SELECT day, recipe_id FROM weekly_plan_legacy")).mappings().all()
+            for row in rows:
+                conn.execute(insert(weekly_plan).values(day=row["day"], slot=2, recipe_id=row["recipe_id"]))
+            conn.execute(sql_text("DROP TABLE weekly_plan_legacy"))
 
-        examples = [Rezept(name="Spaghetti Bolognese", kueche="Italienisch", bild="Bolognese.jpg", portionen=2, kochzeit=35,
-                           schwierigkeit="Einfach", tags=["Pasta", "Herzhaft", "Familie"],zutaten=["250 g Spaghetti",
-                                                                                                   "300 g Hackfleisch",
-                                                                                                   "1 Zwiebel",
-                                                                                                   "1 Dose gehackte Tomaten",
-                                                                                                   "2 EL Öl",
-                                                                                                   "Salz",
-                                                                                                   "Pfeffer"],
-                           anleitung=("1. Spaghetti kochen.\n"
-                                      "2. Zwiebel anbraten.\n"
-                                      "3. Hackfleisch dazugeben.\n"
-                                      "4. Tomaten hinzufügen.\n"
-                                      "5. Köcheln lassen.\n"
-                                      "6. Servieren.")),
-            Rezept(name="Pizza Margherita", kueche="Italienisch", bild="pizza.jpg", portionen=2, kochzeit=25, schwierigkeit="Einfach",
-                   tags=["Vegetarisch", "Pizza", "Schnell"], zutaten=["1 Pizzateig",
-                                                                      "200 g Tomatensauce",
-                                                                      "200 g Mozzarella",
-                                                                      "Basilikum",
-                                                                      "Olivenöl"],
-                   anleitung=("1. Teig ausrollen.\n"
-                              "2. Sauce verteilen.\n"
-                              "3. Mozzarella darauf geben.\n"
-                              "4. Backen.\n"
-                              "5. Mit Basilikum servieren.")),
-            Rezept(name="Omelett", kueche="Frühstück", bild="omelett.jpg", portionen=1, kochzeit=10, schwierigkeit="Einfach",
-                   tags=["Frühstück", "Schnell", "Low Budget"], zutaten=["3 Eier", "1 EL Butter", "Salz", "Pfeffer", "optional: Käse oder Gemüse",],
-                   anleitung=("1. Eier verquirlen.\n"
-                              "2. Butter erhitzen.\n"
-                              "3. Eiermasse braten.\n"
-                              "4. Füllen und zusammenklappen."))]
+    def _migrate_columns(self) -> None:
+        inspector = inspect(self.engine)
+        if "users" in inspector.get_table_names():
+            cols = {c["name"] for c in inspector.get_columns("users")}
+            self._add_column_if_missing("users", cols, "username", "VARCHAR(40)")
+            self._add_column_if_missing("users", cols, "display_name", "VARCHAR(80) DEFAULT ''")
+            self._add_column_if_missing("users", cols, "bio", "VARCHAR(280) DEFAULT ''")
+            self._add_column_if_missing("users", cols, "avatar_mime", "VARCHAR(100)")
+            blob = "BYTEA" if self.dialect == "postgresql" else "BLOB"
+            self._add_column_if_missing("users", cols, "avatar_data", blob)
+            self._add_column_if_missing("users", cols, "updated_at", "VARCHAR(40) DEFAULT ''")
+            with self.engine.begin() as conn:
+                existing = conn.execute(sql_text("SELECT id, email, username FROM users")).mappings().all()
+                for row in existing:
+                    if not row.get("username"):
+                        conn.execute(sql_text("UPDATE users SET username=:u WHERE id=:id"), {"u": f"user{row['id']}", "id": row["id"]})
+                    conn.execute(sql_text("UPDATE users SET updated_at=COALESCE(NULLIF(updated_at,''), created_at) WHERE id=:id"), {"id": row["id"]})
+                conn.execute(sql_text("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_username ON users(username)"))
 
-        for recipe in examples:
-            self.save_recipe(recipe)
-            self.conn.commit()
+        inspector = inspect(self.engine)
+        if "recipes" in inspector.get_table_names():
+            cols = {c["name"] for c in inspector.get_columns("recipes")}
+            self._add_column_if_missing("recipes", cols, "description", "TEXT DEFAULT ''")
+            self._add_column_if_missing("recipes", cols, "owner_user_id", "INTEGER")
+            self._add_column_if_missing("recipes", cols, "source_url", "TEXT")
+            self._add_column_if_missing("recipes", cols, "created_at", "VARCHAR(40) DEFAULT ''")
 
-    def import_builtin_recipes(self) -> None:
-        imported = 0
-        updated = 0
+    def _add_column_if_missing(self, table: str, known: set[str], column: str, ddl: str) -> None:
+        if column in known:
+            return
+        with self.engine.begin() as conn:
+            conn.execute(sql_text(f'ALTER TABLE {table} ADD COLUMN {column} {ddl}'))
+        known.add(column)
 
-        for name, kueche, bild, portionen, kochzeit, schwierigkeit, tags, zutaten, anleitung in builtin_recipe_rows():
-            existing = self.conn.execute("SELECT id, bild FROM recipes WHERE name = ?", (name,)).fetchone()
+    def _ensure_guest_week(self) -> None:
+        with self.engine.begin() as conn:
+            for day in DAYS:
+                for slot in (1, 2, 3):
+                    exists = conn.execute(
+                        select(weekly_plan.c.day).where(and_(weekly_plan.c.day == day, weekly_plan.c.slot == slot))
+                    ).first()
+                    if not exists:
+                        conn.execute(insert(weekly_plan).values(day=day, slot=slot, recipe_id=None))
 
-            if existing:
-                if bild and existing["bild"] != bild:
-                    self.conn.execute(
-                        "UPDATE recipes SET bild = ? WHERE id = ?",
-                        (bild, existing["id"]),
+    def sync_builtin_recipes(self) -> None:
+        self._sync_global_rows(builtin_recipe_rows())
+
+    def sync_external_recipes(self) -> None:
+        self._sync_global_rows(external_recipe_rows())
+
+    def _sync_global_rows(self, rows: list[dict[str, Any]]) -> None:
+        if not rows:
+            return
+        with self.engine.begin() as conn:
+            for row in rows:
+                existing = conn.execute(
+                    select(recipes.c.id, recipes.c.bild, recipes.c.description).where(
+                        and_(recipes.c.name == row["name"], recipes.c.owner_user_id.is_(None))
                     )
-                    updated += 1
-                continue
+                ).mappings().first()
+                if not existing:
+                    conn.execute(insert(recipes).values(**row))
+                else:
+                    values: dict[str, Any] = {}
+                    if row["bild"] and existing["bild"] != row["bild"]:
+                        values["bild"] = row["bild"]
+                    if not existing.get("description"):
+                        values["description"] = row["description"]
+                    if values:
+                        conn.execute(update(recipes).where(recipes.c.id == existing["id"]).values(**values))
 
-            recipe = Rezept(
-                name=name,
-                kueche=kueche,
-                bild=bild,
-                portionen=portionen,
-                kochzeit=kochzeit,
-                schwierigkeit=schwierigkeit,
-                tags=tags,
-                favorit=False,
-                zutaten=zutaten,
-                anleitung=anleitung,
-            )
-            self.save_recipe(recipe)
-            imported += 1
+    def _recipe_dict(self, row: Any) -> dict[str, Any]:
+        r = dict(row)
+        r["tags"] = _safe_json(r.pop("tags_json", "[]"), [])
+        r["zutaten"] = _safe_json(r.pop("zutaten_json", "[]"), [])
+        r["favorit"] = False
+        r["description"] = (r.get("description") or _default_description(
+            r.get("name", "Rezept"), int(r.get("kochzeit") or 30), int(r.get("portionen") or 2), r["tags"]
+        )).strip()
+        return r
 
-        self.conn.commit()
+    def all_recipes(self, user_id: int | None = None) -> list[dict[str, Any]]:
+        condition = recipes.c.owner_user_id.is_(None)
+        if user_id is not None:
+            condition = or_(condition, recipes.c.owner_user_id == user_id)
+        with self.engine.connect() as conn:
+            rows = conn.execute(select(recipes).where(condition).order_by(recipes.c.name.asc())).mappings().all()
+        return [self._recipe_dict(r) for r in rows]
 
-        if imported or updated:
-            print(f"Fest eingebaute Rezepte importiert: {imported}, Bilder aktualisiert: {updated}")
+    def get_recipe(self, recipe_id: int, user_id: int | None = None) -> dict[str, Any] | None:
+        condition = and_(recipes.c.id == recipe_id, recipes.c.owner_user_id.is_(None))
+        if user_id is not None:
+            condition = and_(recipes.c.id == recipe_id, or_(recipes.c.owner_user_id.is_(None), recipes.c.owner_user_id == user_id))
+        with self.engine.connect() as conn:
+            row = conn.execute(select(recipes).where(condition)).mappings().first()
+        return self._recipe_dict(row) if row else None
 
-    def import_external_recipes(self) -> None:
-        imported = 0
-        updated = 0
+    def create_user_recipe(self, owner_user_id: int, payload: dict[str, Any]) -> int:
+        values = {
+            "name": str(payload.get("name", "")).strip()[:240],
+            "kueche": str(payload.get("kueche", "Unbekannt")).strip()[:120] or "Unbekannt",
+            "bild": str(payload.get("bild", "")).strip(),
+            "portionen": max(1, int(payload.get("portionen", 2) or 2)),
+            "kochzeit": max(1, int(payload.get("kochzeit", 30) or 30)),
+            "schwierigkeit": str(payload.get("schwierigkeit", "Einfach")).strip()[:40] or "Einfach",
+            "tags_json": json.dumps(payload.get("tags", []), ensure_ascii=False),
+            "zutaten_json": json.dumps(payload.get("zutaten", []), ensure_ascii=False),
+            "anleitung": str(payload.get("anleitung", "")).strip() or "Keine Anleitung vorhanden.",
+            "description": str(payload.get("description", "")).strip()[:1200],
+            "owner_user_id": owner_user_id,
+            "source_url": str(payload.get("source_url", "")).strip() or None,
+            "created_at": utc_iso(),
+        }
+        if not values["description"]:
+            values["description"] = _default_description(values["name"], values["kochzeit"], values["portionen"], payload.get("tags", []))
+        with self.engine.begin() as conn:
+            result = conn.execute(insert(recipes).values(**values))
+            return int(result.inserted_primary_key[0])
 
-        for name, kueche, bild, portionen, kochzeit, schwierigkeit, tags, zutaten, anleitung in external_recipe_rows():
-            existing = self.conn.execute(
-                "SELECT id FROM recipes WHERE name = ?",
-                (name,),
-            ).fetchone()
+    def delete_user_recipe(self, recipe_id: int, owner_user_id: int) -> bool:
+        with self.engine.begin() as conn:
+            result = conn.execute(delete(recipes).where(and_(recipes.c.id == recipe_id, recipes.c.owner_user_id == owner_user_id)))
+            return bool(result.rowcount)
 
+    # ----- Auth / Profil -----
+
+    def create_user(self, username: str, email: str, password_hash: str, display_name: str = "") -> int:
+        now = utc_iso()
+        with self.engine.begin() as conn:
+            result = conn.execute(insert(users).values(
+                username=username, email=email, password_hash=password_hash,
+                display_name=(display_name or username)[:80], bio="",
+                created_at=now, updated_at=now
+            ))
+            return int(result.inserted_primary_key[0])
+
+    def get_user_by_email(self, email: str):
+        with self.engine.connect() as conn:
+            return conn.execute(select(users).where(users.c.email == email)).mappings().first()
+
+    def get_user_by_username(self, username: str):
+        with self.engine.connect() as conn:
+            return conn.execute(select(users).where(users.c.username == username)).mappings().first()
+
+    def get_user(self, user_id: int):
+        with self.engine.connect() as conn:
+            return conn.execute(select(users).where(users.c.id == user_id)).mappings().first()
+
+    def update_profile(self, user_id: int, username: str, display_name: str, bio: str) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(update(users).where(users.c.id == user_id).values(
+                username=username, display_name=display_name[:80], bio=bio[:280], updated_at=utc_iso()
+            ))
+
+    def set_avatar(self, user_id: int, mime: str | None, data: bytes | None) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(update(users).where(users.c.id == user_id).values(
+                avatar_mime=mime, avatar_data=data, updated_at=utc_iso()
+            ))
+
+    def get_avatar(self, user_id: int):
+        with self.engine.connect() as conn:
+            return conn.execute(select(users.c.avatar_mime, users.c.avatar_data).where(users.c.id == user_id)).mappings().first()
+
+    def update_user_password(self, user_id: int, password_hash: str) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(update(users).where(users.c.id == user_id).values(password_hash=password_hash, updated_at=utc_iso()))
+            conn.execute(delete(sessions).where(sessions.c.user_id == user_id))
+
+    def delete_user(self, user_id: int) -> None:
+        # PostgreSQL/SQLite mit FK CASCADE räumen abhängige Tabellen.
+        with self.engine.begin() as conn:
+            conn.execute(delete(user_eaten).where(user_eaten.c.user_id == user_id))
+            conn.execute(delete(user_preferences).where(user_preferences.c.user_id == user_id))
+            conn.execute(delete(user_at_home).where(user_at_home.c.user_id == user_id))
+            conn.execute(delete(user_pantry).where(user_pantry.c.user_id == user_id))
+            conn.execute(delete(user_ratings).where(user_ratings.c.user_id == user_id))
+            conn.execute(delete(user_favorites).where(user_favorites.c.user_id == user_id))
+            conn.execute(delete(user_weekly_plan).where(user_weekly_plan.c.user_id == user_id))
+            conn.execute(delete(sessions).where(sessions.c.user_id == user_id))
+            conn.execute(delete(recipes).where(recipes.c.owner_user_id == user_id))
+            conn.execute(delete(users).where(users.c.id == user_id))
+
+    def create_session(self, user_id: int, token_hash: str, expires_at: str) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(insert(sessions).values(
+                user_id=user_id, token_hash=token_hash, expires_at=expires_at, created_at=utc_iso()
+            ))
+
+    def get_session_user(self, token_hash: str, now_iso: str):
+        with self.engine.begin() as conn:
+            conn.execute(delete(sessions).where(sessions.c.expires_at <= now_iso))
+            row = conn.execute(
+                select(users.c.id, users.c.username, users.c.email, users.c.display_name, users.c.bio, users.c.created_at)
+                .select_from(sessions.join(users, sessions.c.user_id == users.c.id))
+                .where(and_(sessions.c.token_hash == token_hash, sessions.c.expires_at > now_iso))
+            ).mappings().first()
+            return row
+
+    def delete_session(self, token_hash: str) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(delete(sessions).where(sessions.c.token_hash == token_hash))
+
+    def delete_all_sessions(self, user_id: int) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(delete(sessions).where(sessions.c.user_id == user_id))
+
+    def reset_all_users(self) -> int:
+        with self.engine.begin() as conn:
+            count = conn.execute(select(users.c.id)).all()
+            # explizit löschen, damit auch alte DBs ohne funktionierende FK-Cascades sauber werden.
+            for uid, in count:
+                conn.execute(delete(user_eaten).where(user_eaten.c.user_id == uid))
+                conn.execute(delete(user_preferences).where(user_preferences.c.user_id == uid))
+                conn.execute(delete(user_at_home).where(user_at_home.c.user_id == uid))
+                conn.execute(delete(user_pantry).where(user_pantry.c.user_id == uid))
+                conn.execute(delete(user_ratings).where(user_ratings.c.user_id == uid))
+                conn.execute(delete(user_favorites).where(user_favorites.c.user_id == uid))
+                conn.execute(delete(user_weekly_plan).where(user_weekly_plan.c.user_id == uid))
+                conn.execute(delete(sessions).where(sessions.c.user_id == uid))
+                conn.execute(delete(recipes).where(recipes.c.owner_user_id == uid))
+            conn.execute(delete(users))
+            return len(count)
+
+    # ----- Favoriten / Bewertungen -----
+
+    def favorite_ids(self, user_id: int) -> list[int]:
+        with self.engine.connect() as conn:
+            rows = conn.execute(select(user_favorites.c.recipe_id).where(user_favorites.c.user_id == user_id)).all()
+        return [int(r[0]) for r in rows]
+
+    def toggle_user_favorite(self, user_id: int, recipe_id: int) -> bool:
+        with self.engine.begin() as conn:
+            exists = conn.execute(select(user_favorites.c.recipe_id).where(and_(
+                user_favorites.c.user_id == user_id, user_favorites.c.recipe_id == recipe_id
+            ))).first()
+            if exists:
+                conn.execute(delete(user_favorites).where(and_(
+                    user_favorites.c.user_id == user_id, user_favorites.c.recipe_id == recipe_id
+                )))
+                return False
+            conn.execute(insert(user_favorites).values(user_id=user_id, recipe_id=recipe_id))
+            return True
+
+    def ratings(self, user_id: int) -> dict[str, int]:
+        with self.engine.connect() as conn:
+            rows = conn.execute(select(user_ratings.c.recipe_id, user_ratings.c.rating).where(user_ratings.c.user_id == user_id)).all()
+        return {str(r[0]): int(r[1]) for r in rows}
+
+    def set_rating(self, user_id: int, recipe_id: int, rating: int) -> None:
+        with self.engine.begin() as conn:
+            existing = conn.execute(select(user_ratings.c.recipe_id).where(and_(
+                user_ratings.c.user_id == user_id, user_ratings.c.recipe_id == recipe_id
+            ))).first()
             if existing:
-                self.conn.execute(
-                    """
-                    UPDATE recipes
-                    SET kueche=?, bild=?, portionen=?, kochzeit=?, schwierigkeit=?,
-                        tags_json=?, zutaten_json=?, anleitung=?
-                    WHERE id=?
-                    """,
-                    (
-                        kueche,
-                        bild,
-                        portionen,
-                        kochzeit,
-                        schwierigkeit,
-                        json.dumps(tags, ensure_ascii=False),
-                        json.dumps(zutaten, ensure_ascii=False),
-                        anleitung,
-                        existing["id"],
-                    ),
-                )
-                updated += 1
-                continue
+                conn.execute(update(user_ratings).where(and_(
+                    user_ratings.c.user_id == user_id, user_ratings.c.recipe_id == recipe_id
+                )).values(rating=rating))
+            else:
+                conn.execute(insert(user_ratings).values(user_id=user_id, recipe_id=recipe_id, rating=rating))
 
-            recipe = Rezept(
-                name=name,
-                kueche=kueche,
-                bild=bild,
-                portionen=portionen,
-                kochzeit=kochzeit,
-                schwierigkeit=schwierigkeit,
-                tags=tags,
-                favorit=False,
-                zutaten=zutaten,
-                anleitung=anleitung,
-            )
-
-            self.save_recipe(recipe)
-            imported += 1
-
-        self.conn.commit()
-
-        if imported or updated:
-            print(f"Externe Rezepte importiert: {imported}, aktualisiert: {updated}")
-    
-    def row_to_recipe(self, row: sqlite3.Row) -> Rezept:
-        return Rezept(
-            id=row["id"],
-            name=row["name"],
-            kueche=row["kueche"],
-            bild=row["bild"],
-            portionen=row["portionen"],
-            kochzeit=row["kochzeit"],
-            schwierigkeit=row["schwierigkeit"],
-            tags=json.loads(row["tags_json"] or "[]"),
-            favorit=bool(row["favorit"]),
-            zutaten=json.loads(row["zutaten_json"] or "[]"),
-            anleitung=row["anleitung"] or "Keine Anleitung vorhanden.",
-        )
-
-    def all_recipes(self) -> list[Rezept]:
-        rows = self.conn.execute(
-            "SELECT * FROM recipes ORDER BY favorit DESC, name COLLATE NOCASE"
-        ).fetchall()
-        return [self.row_to_recipe(row) for row in rows]
-
-    def get_recipe(self, recipe_id: int) -> Rezept | None:
-        row = self.conn.execute(
-            "SELECT * FROM recipes WHERE id = ?",
-            (recipe_id,),
-        ).fetchone()
-        return self.row_to_recipe(row) if row else None
-
-    def save_recipe(self, recipe: Rezept) -> int:
-        payload = (
-            recipe.name.strip(),
-            recipe.kueche.strip() or "Unbekannt",
-            recipe.bild.strip(),
-            max(1, int(recipe.portionen)),
-            max(1, int(recipe.kochzeit)),
-            recipe.schwierigkeit,
-            json.dumps(recipe.tags, ensure_ascii=False),
-            1 if recipe.favorit else 0,
-            json.dumps(recipe.zutaten, ensure_ascii=False),
-            recipe.anleitung.strip() or "Keine Anleitung vorhanden.",
-        )
-
-        if recipe.id is None:
-            cur = self.conn.execute(
-                """
-                INSERT INTO recipes
-                (name, kueche, bild, portionen, kochzeit, schwierigkeit,
-                 tags_json, favorit, zutaten_json, anleitung)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                payload,
-            )
-            self.conn.commit()
-            return int(cur.lastrowid)
-
-        self.conn.execute(
-            """
-            UPDATE recipes
-            SET name=?, kueche=?, bild=?, portionen=?, kochzeit=?, schwierigkeit=?,
-                tags_json=?, favorit=?, zutaten_json=?, anleitung=?
-            WHERE id=?
-            """,
-            (*payload, recipe.id),
-        )
-        self.conn.commit()
-        return recipe.id
-
-    def delete_recipe(self, recipe_id: int) -> None:
-        self.conn.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
-        self.conn.commit()
-
-    def delete_recipes_without_images(self) -> int:
-        cur = self.conn.execute("""
-        DELETE FROM recipes
-        WHERE bild IS NULL
-           OR TRIM(bild) = ''
-    """)
-        self.conn.commit()
-        return cur.rowcount
-
-    def toggle_favorite(self, recipe_id: int) -> None:
-        self.conn.execute(
-            "UPDATE recipes SET favorit = CASE favorit WHEN 1 THEN 0 ELSE 1 END WHERE id = ?",
-            (recipe_id,),
-        )
-        self.conn.commit()
+    # ----- Wochenplan -----
 
     def weekly_plan(self) -> dict[str, dict[int, int | None]]:
-        rows = self.conn.execute(
-            "SELECT day, slot, recipe_id FROM weekly_plan ORDER BY day, slot"
-        ).fetchall()
-
-        plan = {}
-
-        for day in DAYS:
-            plan[day] = {1: None, 2: None, 3: None}
-
-        for row in rows:
-            plan[row["day"]][row["slot"]] = row["recipe_id"]
-
+        plan = {day: {1: None, 2: None, 3: None} for day in DAYS}
+        with self.engine.connect() as conn:
+            rows = conn.execute(select(weekly_plan.c.day, weekly_plan.c.slot, weekly_plan.c.recipe_id)).all()
+        for day, slot, rid in rows:
+            if day in plan and slot in (1, 2, 3):
+                plan[day][int(slot)] = rid
         return plan
 
     def set_weekly_plan_slot(self, day: str, slot: int, recipe_id: int | None) -> None:
-        self.conn.execute(
-            """
-            INSERT INTO weekly_plan(day, slot, recipe_id)
-            VALUES (?, ?, ?)
-            ON CONFLICT(day, slot)
-            DO UPDATE SET recipe_id = excluded.recipe_id
-            """,
-            (day, slot, None if recipe_id == 0 else recipe_id),
-        )
-        self.conn.commit()
-
-    def set_weekly_plan(self, plan: dict) -> None:
-        entries = []
-        for day, slots in plan.items():
-            if isinstance(slots, dict):
-                for slot, recipe_id in slots.items():
-                    entries.append((day, int(slot), recipe_id))
-        self.set_weekly_plan_bulk(entries)
+        with self.engine.begin() as conn:
+            existing = conn.execute(select(weekly_plan.c.day).where(and_(
+                weekly_plan.c.day == day, weekly_plan.c.slot == slot
+            ))).first()
+            if existing:
+                conn.execute(update(weekly_plan).where(and_(
+                    weekly_plan.c.day == day, weekly_plan.c.slot == slot
+                )).values(recipe_id=recipe_id or None))
+            else:
+                conn.execute(insert(weekly_plan).values(day=day, slot=slot, recipe_id=recipe_id or None))
 
     def set_weekly_plan_bulk(self, entries: list[tuple[str, int, int | None]]) -> None:
-        with self.conn:
-            for day, slot, recipe_id in entries:
-                self.conn.execute(
-                    """
-                    INSERT INTO weekly_plan(day, slot, recipe_id)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT(day, slot)
-                    DO UPDATE SET recipe_id = excluded.recipe_id
-                    """,
-                    (day, slot, None if recipe_id == 0 else recipe_id),
-                )
+        for day, slot, rid in entries:
+            self.set_weekly_plan_slot(day, slot, rid)
 
     def reset_weekly_plan(self) -> None:
-        entries = [(day, slot, None) for day in DAYS for slot in (1, 2, 3)]
-        self.set_weekly_plan_bulk(entries)
+        with self.engine.begin() as conn:
+            conn.execute(update(weekly_plan).values(recipe_id=None))
 
-    # ---------- Benutzerkonten ----------
-    def create_user(self, email: str, password_hash: str) -> int:
-        cur = self.conn.execute(
-            "INSERT INTO users(email, password_hash) VALUES (?, ?)",
-            (email.strip().lower(), password_hash),
-        )
-        self.conn.commit()
-        return int(cur.lastrowid)
-
-    def get_user_by_email(self, email: str):
-        return self.conn.execute(
-            "SELECT id, email, password_hash, created_at FROM users WHERE email = ? COLLATE NOCASE",
-            (email.strip(),),
-        ).fetchone()
-
-    def get_user(self, user_id: int):
-        return self.conn.execute(
-            "SELECT id, email, password_hash, created_at FROM users WHERE id = ?",
-            (user_id,),
-        ).fetchone()
-
-    def update_user_password(self, user_id: int, password_hash: str) -> None:
-        self.conn.execute(
-            "UPDATE users SET password_hash = ? WHERE id = ?",
-            (password_hash, user_id),
-        )
-        self.conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
-        self.conn.commit()
-
-    def delete_user(self, user_id: int) -> None:
-        self.conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
-        self.conn.commit()
-
-    # ---------- Sessions ----------
-    def create_session(self, user_id: int, token_hash: str, expires_at: str) -> None:
-        self.conn.execute(
-            "INSERT INTO sessions(user_id, token_hash, expires_at) VALUES (?, ?, ?)",
-            (user_id, token_hash, expires_at),
-        )
-        self.conn.commit()
-
-    def get_session_user(self, token_hash: str, now_iso: str):
-        self.conn.execute("DELETE FROM sessions WHERE expires_at <= ?", (now_iso,))
-        row = self.conn.execute(
-            """
-            SELECT u.id, u.email, u.created_at
-            FROM sessions s
-            JOIN users u ON u.id = s.user_id
-            WHERE s.token_hash = ? AND s.expires_at > ?
-            """,
-            (token_hash, now_iso),
-        ).fetchone()
-        self.conn.commit()
-        return row
-
-    def delete_session(self, token_hash: str) -> None:
-        self.conn.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
-        self.conn.commit()
-
-    # ---------- Benutzerspezifischer Wochenplan ----------
     def user_weekly_plan(self, user_id: int) -> dict[str, dict[int, int | None]]:
         plan = {day: {1: None, 2: None, 3: None} for day in DAYS}
-        rows = self.conn.execute(
-            "SELECT day, slot, recipe_id FROM user_weekly_plan WHERE user_id = ?",
-            (user_id,),
-        ).fetchall()
-        for row in rows:
-            if row["day"] in plan and row["slot"] in (1, 2, 3):
-                plan[row["day"]][row["slot"]] = row["recipe_id"]
+        with self.engine.connect() as conn:
+            rows = conn.execute(select(user_weekly_plan.c.day, user_weekly_plan.c.slot, user_weekly_plan.c.recipe_id).where(
+                user_weekly_plan.c.user_id == user_id
+            )).all()
+        for day, slot, rid in rows:
+            if day in plan and slot in (1, 2, 3):
+                plan[day][int(slot)] = rid
         return plan
 
     def set_user_weekly_plan_slot(self, user_id: int, day: str, slot: int, recipe_id: int | None) -> None:
-        self.conn.execute(
-            """
-            INSERT INTO user_weekly_plan(user_id, day, slot, recipe_id)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(user_id, day, slot)
-            DO UPDATE SET recipe_id = excluded.recipe_id
-            """,
-            (user_id, day, slot, None if recipe_id in (None, 0) else recipe_id),
-        )
-        self.conn.commit()
+        with self.engine.begin() as conn:
+            existing = conn.execute(select(user_weekly_plan.c.user_id).where(and_(
+                user_weekly_plan.c.user_id == user_id,
+                user_weekly_plan.c.day == day,
+                user_weekly_plan.c.slot == slot
+            ))).first()
+            if existing:
+                conn.execute(update(user_weekly_plan).where(and_(
+                    user_weekly_plan.c.user_id == user_id,
+                    user_weekly_plan.c.day == day,
+                    user_weekly_plan.c.slot == slot
+                )).values(recipe_id=recipe_id or None))
+            else:
+                conn.execute(insert(user_weekly_plan).values(
+                    user_id=user_id, day=day, slot=slot, recipe_id=recipe_id or None
+                ))
 
     def set_user_weekly_plan_bulk(self, user_id: int, entries: list[tuple[str, int, int | None]]) -> None:
-        with self.conn:
-            for day, slot, recipe_id in entries:
-                self.conn.execute(
-                    """
-                    INSERT INTO user_weekly_plan(user_id, day, slot, recipe_id)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(user_id, day, slot)
-                    DO UPDATE SET recipe_id = excluded.recipe_id
-                    """,
-                    (user_id, day, slot, None if recipe_id in (None, 0) else recipe_id),
-                )
+        for day, slot, rid in entries:
+            self.set_user_weekly_plan_slot(user_id, day, slot, rid)
 
     def reset_user_weekly_plan(self, user_id: int) -> None:
-        self.conn.execute("DELETE FROM user_weekly_plan WHERE user_id = ?", (user_id,))
-        self.conn.commit()
+        with self.engine.begin() as conn:
+            conn.execute(delete(user_weekly_plan).where(user_weekly_plan.c.user_id == user_id))
 
-    # ---------- Favoriten ----------
-    def favorite_ids(self, user_id: int) -> list[int]:
-        rows = self.conn.execute(
-            "SELECT recipe_id FROM user_favorites WHERE user_id = ? ORDER BY recipe_id",
-            (user_id,),
-        ).fetchall()
-        return [int(row["recipe_id"]) for row in rows]
+    # ----- Vorrat / Zuhause -----
 
-    def toggle_user_favorite(self, user_id: int, recipe_id: int) -> bool:
-        exists = self.conn.execute(
-            "SELECT 1 FROM user_favorites WHERE user_id = ? AND recipe_id = ?",
-            (user_id, recipe_id),
-        ).fetchone()
-        if exists:
-            self.conn.execute(
-                "DELETE FROM user_favorites WHERE user_id = ? AND recipe_id = ?",
-                (user_id, recipe_id),
-            )
-            favorite = False
-        else:
-            self.conn.execute(
-                "INSERT INTO user_favorites(user_id, recipe_id) VALUES (?, ?)",
-                (user_id, recipe_id),
-            )
-            favorite = True
-        self.conn.commit()
-        return favorite
-
-    # ---------- Bewertungen ----------
-    def ratings(self, user_id: int) -> dict[str, int]:
-        rows = self.conn.execute(
-            "SELECT recipe_id, rating FROM user_ratings WHERE user_id = ?",
-            (user_id,),
-        ).fetchall()
-        return {str(row["recipe_id"]): int(row["rating"]) for row in rows}
-
-    def set_rating(self, user_id: int, recipe_id: int, rating: int) -> None:
-        self.conn.execute(
-            """
-            INSERT INTO user_ratings(user_id, recipe_id, rating) VALUES (?, ?, ?)
-            ON CONFLICT(user_id, recipe_id) DO UPDATE SET rating = excluded.rating
-            """,
-            (user_id, recipe_id, rating),
-        )
-        self.conn.commit()
-
-    # ---------- Vorrat / Zuhause ----------
-    def get_user_items(self, table: str, user_id: int) -> list[str]:
-        if table not in {"user_pantry", "user_at_home"}:
+    def get_user_items(self, table_name: str, user_id: int) -> list[str]:
+        table = {"user_pantry": user_pantry, "user_at_home": user_at_home}.get(table_name)
+        if table is None:
             raise ValueError("Ungültige Tabelle")
-        rows = self.conn.execute(
-            f"SELECT item FROM {table} WHERE user_id = ? ORDER BY item COLLATE NOCASE",
-            (user_id,),
-        ).fetchall()
-        return [row["item"] for row in rows]
+        with self.engine.connect() as conn:
+            rows = conn.execute(select(table.c.item).where(table.c.user_id == user_id).order_by(table.c.item.asc())).all()
+        return [r[0] for r in rows]
 
-    def replace_user_items(self, table: str, user_id: int, items: list[str]) -> None:
-        if table not in {"user_pantry", "user_at_home"}:
+    def replace_user_items(self, table_name: str, user_id: int, items: list[str]) -> None:
+        table = {"user_pantry": user_pantry, "user_at_home": user_at_home}.get(table_name)
+        if table is None:
             raise ValueError("Ungültige Tabelle")
-        cleaned = []
-        seen = set()
+        clean: list[str] = []
+        seen: set[str] = set()
         for item in items:
-            value = str(item).strip()
+            value = str(item).strip()[:240]
             key = value.casefold()
             if value and key not in seen:
+                clean.append(value)
                 seen.add(key)
-                cleaned.append(value)
-        with self.conn:
-            self.conn.execute(f"DELETE FROM {table} WHERE user_id = ?", (user_id,))
-            self.conn.executemany(
-                f"INSERT INTO {table}(user_id, item) VALUES (?, ?)",
-                [(user_id, item) for item in cleaned],
-            )
+        with self.engine.begin() as conn:
+            conn.execute(delete(table).where(table.c.user_id == user_id))
+            if clean:
+                conn.execute(insert(table), [{"user_id": user_id, "item": item} for item in clean])
+
+    # ----- Gegessen-Historie -----
+
+    def add_eaten(self, user_id: int, recipe_id: int) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(insert(user_eaten).values(user_id=user_id, recipe_id=recipe_id, eaten_at=utc_iso()))
+
+    def eaten_history(self, user_id: int, limit: int = 30) -> list[dict[str, Any]]:
+        with self.engine.connect() as conn:
+            rows = conn.execute(
+                select(user_eaten.c.id, user_eaten.c.recipe_id, user_eaten.c.eaten_at)
+                .where(user_eaten.c.user_id == user_id)
+                .order_by(user_eaten.c.id.desc()).limit(limit)
+            ).mappings().all()
+        return [dict(r) for r in rows]
+
+    def clear_eaten(self, user_id: int) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(delete(user_eaten).where(user_eaten.c.user_id == user_id))
+
+    # ----- Präferenzen -----
+
+    def get_preferences(self, user_id: int) -> dict[str, Any]:
+        with self.engine.connect() as conn:
+            row = conn.execute(select(user_preferences.c.preferences_json).where(user_preferences.c.user_id == user_id)).first()
+        return _safe_json(row[0] if row else "{}", {})
+
+    def set_preferences(self, user_id: int, prefs: dict[str, Any]) -> None:
+        value = json.dumps(prefs, ensure_ascii=False)
+        with self.engine.begin() as conn:
+            exists = conn.execute(select(user_preferences.c.user_id).where(user_preferences.c.user_id == user_id)).first()
+            if exists:
+                conn.execute(update(user_preferences).where(user_preferences.c.user_id == user_id).values(preferences_json=value))
+            else:
+                conn.execute(insert(user_preferences).values(user_id=user_id, preferences_json=value))

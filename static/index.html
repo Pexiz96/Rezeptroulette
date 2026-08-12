@@ -1,2297 +1,611 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rezeptroulette</title>
-  <link rel="manifest" href="/static/manifest.json">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#ff6b35">
-
+  <meta name="description" content="Rezeptroulette hilft dir, Rezepte zu entdecken, Wochen zu planen und Lebensmittel sinnvoll zu verwerten.">
+  <meta name="robots" content="index,follow">
+  <title>Rezeptroulette – Was essen wir heute?</title>
+  <link rel="manifest" href="/static/manifest.json">
   <style>
     *{box-sizing:border-box}
-
     :root{
-      --bg:#fff3e7;
-      --text:#2d1b12;
-      --muted:#7c4a2d;
-      --white:#fff;
-      --cream:#fff7ed;
-      --orange:#ff6b35;
-      --amber:#ff9f1c;
-      --green:#22a05a;
-      --shadow:0 18px 50px rgba(90,40,15,.12);
-      --soft:0 8px 24px rgba(90,40,15,.08);
-      --line:rgba(90,40,15,.12);
+      --bg:#fff3e7;--surface:#fffaf5;--surface-2:#fff0e3;--text:#2d1b12;--muted:#7c4a2d;
+      --line:rgba(90,40,15,.12);--brand:#ff6b35;--brand-2:#ff9f1c;--green:#22a05a;--red:#dc2626;
+      --shadow:0 18px 50px rgba(90,40,15,.12);--soft:0 8px 24px rgba(90,40,15,.08);
+      --radius:22px;--radius-sm:14px;--max:1240px
+    }
+    body.dark{
+      --bg:#120b08;--surface:#24140d;--surface-2:#3a2115;--text:#fff7ed;--muted:#d8b49c;
+      --line:rgba(255,255,255,.10);--shadow:0 18px 50px rgba(0,0,0,.34);--soft:0 8px 24px rgba(0,0,0,.25)
     }
 
-    html{scroll-behavior:smooth}
+    body.dark .topbar{background:rgba(45,27,18,.88);border-bottom-color:rgba(255,255,255,.08)}
+    body.dark .nav-btn:hover,body.dark .nav-btn.active{background:#3a2115;color:#ff9f1c}
+    body.dark .secondary-btn,body.dark .icon-btn{background:#3a2115;color:#fff7ed;border-color:rgba(255,255,255,.10)}
+    body.dark input,body.dark select,body.dark textarea{background:#1a0f0a;color:#fff7ed}
 
+    html{scroll-behavior:smooth;background:var(--bg)}
     body{
       margin:0;
-      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
       background:linear-gradient(135deg,#fff8f0,#ffe3d1);
       color:var(--text);
-      min-height:100vh;
-      letter-spacing:-.02em;
+      line-height:1.5
     }
-
+    body.dark{background:linear-gradient(135deg,#120b08,#2d1b12)}
     button,input,select,textarea{font:inherit}
-
-    button{
-      border:none;
-      cursor:pointer;
-      border-radius:999px;
-      padding:14px 22px;
-      font-weight:850;
-      transition:.2s ease;
+    button{border:0;cursor:pointer}
+    img{max-width:100%;display:block}
+    a{color:inherit}
+    .hidden{display:none!important}
+    .app-shell{min-height:100vh}
+    .topbar{position:sticky;top:0;z-index:1000;background:rgba(255,247,237,.92);backdrop-filter:blur(22px);border-bottom:1px solid rgba(90,40,15,.10)}
+    .topbar-inner{max-width:var(--max);margin:auto;min-height:72px;padding:10px 18px;display:flex;align-items:center;gap:18px}
+    .brand{display:flex;align-items:center;gap:11px;font-weight:900;white-space:nowrap}
+    .brand img{width:42px;height:42px;border-radius:14px;object-fit:cover;background:var(--surface-2)}
+    .brand span{font-size:20px}
+    .nav{display:flex;align-items:center;gap:4px;margin-left:auto}
+    .nav-btn,.icon-btn,.ghost-btn,.secondary-btn,.primary-btn,.danger-btn{
+      border-radius:13px;padding:11px 14px;font-weight:760;transition:.18s ease
     }
-
-    button:hover{transform:translateY(-2px)}
-    button:active{transform:scale(.97)}
-
-    input,select,textarea{
-      padding:14px 16px;
-      border:none;
-      border-radius:16px;
-      background:var(--white);
-      box-shadow:var(--soft);
-      color:var(--text);
+    .nav-btn{background:transparent;color:var(--muted)}
+    .nav-btn:hover,.nav-btn.active{background:var(--surface);color:var(--brand);box-shadow:var(--soft)}
+    .primary-btn{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#fff;box-shadow:0 12px 30px rgba(255,107,53,.28)}
+    .secondary-btn{background:var(--surface);color:var(--text);border:1px solid var(--line)}
+    .ghost-btn{background:transparent;color:var(--muted)}
+    .danger-btn{background:#fff1f2;color:#be123c;border:1px solid #fecdd3}
+    body.dark .danger-btn{background:#3f1621;color:#fecdd3;border-color:#6b2337}
+    .icon-btn{width:44px;height:44px;padding:0;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line)}
+    .account-btn{display:flex;align-items:center;gap:9px;max-width:220px}
+    .avatar-mini{width:30px;height:30px;border-radius:50%;object-fit:cover;background:var(--surface-2);display:grid;place-items:center;flex:none}
+    main{max-width:var(--max);margin:auto;padding:32px 18px 120px}
+    .hero{display:grid;grid-template-columns:1.2fr .8fr;gap:22px;align-items:stretch;margin-bottom:34px}
+    .hero-main,.hero-side,.panel,.card,.modal-card,.day-card,.stat-card{background:var(--surface);border:1px solid var(--line);box-shadow:var(--soft)}
+    .hero-main{padding:52px;border-radius:32px;position:relative;overflow:hidden}
+    .hero-main:after{content:"";position:absolute;width:340px;height:340px;border-radius:50%;right:-130px;top:-170px;background:rgba(255,183,3,.18);opacity:1}
+    body.dark .hero-main:after{background:linear-gradient(135deg,#7c2d12,#431407);opacity:.35}
+    .hero-main>*{position:relative;z-index:2}
+    .eyebrow{display:inline-flex;align-items:center;gap:7px;background:var(--surface-2);color:var(--brand);font-weight:800;padding:8px 12px;border-radius:999px;font-size:14px}
+    h1{font-size:clamp(42px,5.6vw,72px);line-height:.98;letter-spacing:-.055em;margin:20px 0 18px}
+    h2{font-size:clamp(28px,3vw,38px);line-height:1.05;letter-spacing:-.035em;margin:0}
+    h3{margin:0;line-height:1.2}
+    .lead{font-size:19px;color:var(--muted);max-width:680px}
+    .hero-actions,.toolbar,.button-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .hero-actions{margin-top:26px}
+    .hero-actions button{padding:15px 20px}
+    .hero-side{border-radius:32px;padding:24px;display:grid;gap:12px}
+    .quick-tile{display:grid;grid-template-columns:48px 1fr auto;align-items:center;gap:13px;padding:16px;border-radius:18px;background:var(--surface-2);border:1px solid var(--line);cursor:pointer;text-align:left}
+    .quick-tile .qicon{width:48px;height:48px;display:grid;place-items:center;border-radius:15px;background:var(--surface);font-size:23px}
+    .quick-tile small{display:block;color:var(--muted);margin-top:2px}
+    .section{margin-top:38px}
+    .section-head{display:flex;align-items:end;justify-content:space-between;gap:18px;margin-bottom:18px}
+    .section-head p{margin:7px 0 0;color:var(--muted)}
+    .recipe-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+    .card{border-radius:var(--radius);overflow:hidden;position:relative;transition:.18s ease}
+    .card:hover{transform:translateY(-3px);box-shadow:var(--shadow)}
+    .card-media{aspect-ratio:4/3;background:var(--surface-2);overflow:hidden;cursor:pointer}
+    .card-media img{width:100%;height:100%;object-fit:cover}
+    .card-body{padding:18px}
+    .card-title{font-size:21px;font-weight:900;letter-spacing:-.025em;cursor:pointer}
+    .card-desc{color:var(--muted);font-size:14px;margin:8px 0 12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:42px}
+    .meta{display:flex;gap:8px;flex-wrap:wrap;color:var(--muted);font-size:13px}
+    .pill{display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border-radius:999px;background:var(--bg);border:1px solid var(--line)}
+    .favorite-float{position:absolute;right:12px;top:12px;width:42px;height:42px;border-radius:50%;background:color-mix(in srgb,var(--surface) 92%,transparent);box-shadow:var(--soft);font-size:19px}
+    .card-actions{display:flex;gap:8px;margin-top:15px}
+    .card-actions button{flex:1;padding:10px 12px}
+    .filter-panel{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:16px;margin:18px 0;display:grid;gap:14px}
+    .search-row{display:grid;grid-template-columns:2fr repeat(3,minmax(150px,.65fr));gap:10px}
+    input,select,textarea{width:100%;border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:13px;padding:12px 13px;outline:none}
+    input:focus,select:focus,textarea:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(255,107,53,.14)}
+    textarea{resize:vertical;min-height:120px}
+    label.field{display:grid;gap:6px;font-size:14px;font-weight:720}
+    label.field span{color:var(--muted)}
+    .chips{display:flex;gap:8px;flex-wrap:wrap}
+    .chip-btn{padding:9px 12px;border-radius:999px;background:var(--bg);border:1px solid var(--line);color:var(--text);font-weight:700}
+    .chip-btn.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+    .empty{padding:38px;text-align:center;border:1px dashed var(--line);border-radius:22px;color:var(--muted);background:var(--surface)}
+    .detail-shell{display:grid;grid-template-columns:minmax(0,1fr) 430px;gap:22px}
+    .detail-media{border-radius:28px;overflow:hidden;background:var(--surface-2);min-height:420px}
+    .detail-media img{width:100%;height:100%;object-fit:cover}
+    .detail-summary{background:var(--surface);border:1px solid var(--line);border-radius:28px;padding:28px}
+    .detail-summary h1{font-size:44px;margin:10px 0 14px}
+    .detail-desc{color:var(--muted)}
+    .detail-columns{display:grid;grid-template-columns:.8fr 1.2fr;gap:18px;margin-top:22px}
+    .panel{border-radius:22px;padding:22px}
+    .ingredient-list,.step-list,.shopping-list{display:grid;gap:9px;margin-top:14px}
+    .ingredient,.step,.shopping-item{padding:12px 13px;border-radius:13px;background:var(--bg);border:1px solid var(--line)}
+    .step{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start}
+    .step-number{width:30px;height:30px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;font-weight:850}
+    .rating{display:flex;gap:4px}
+    .star{background:transparent;padding:3px;font-size:24px}
+    .week-grid{display:grid;grid-template-columns:repeat(7,minmax(180px,1fr));gap:12px;overflow-x:auto;padding-bottom:8px}
+    .day-card{border-radius:18px;padding:14px;min-width:180px}
+    .day-card h3{margin-bottom:10px}
+    .slot{background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:10px;margin-top:9px}
+    .slot-label{font-size:12px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+    .slot-recipe{font-weight:780;margin:5px 0 8px}
+    .slot img{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:10px;margin-top:8px}
+    .slot select{padding:9px;font-size:13px}
+    .shopping-columns{display:grid;grid-template-columns:320px 1fr;gap:18px}
+    .shopping-item{display:flex;align-items:center;gap:10px}
+    .shopping-item.done{opacity:.52;text-decoration:line-through}
+    .shopping-item input{width:auto}
+    .roulette-layout{display:grid;grid-template-columns:300px 1fr;gap:18px}
+    .roulette-result{min-height:460px;display:grid;grid-template-columns:1fr 1fr;overflow:hidden;border-radius:28px;background:var(--surface);border:1px solid var(--line)}
+    .roulette-result .image{min-height:460px;background:var(--surface-2)}
+    .roulette-result img{width:100%;height:100%;object-fit:cover}
+    .roulette-copy{padding:34px;display:flex;flex-direction:column;justify-content:center}
+    .roulette-copy h2{font-size:42px;margin:10px 0}
+    .big-draw{width:100%;padding:17px;font-size:17px}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}
+    .stat-card{border-radius:16px;padding:14px}
+    .stat-card strong{font-size:24px;display:block}
+    .stat-card span{color:var(--muted);font-size:13px}
+    .modal{position:fixed;inset:0;background:rgba(45,27,18,.45);display:grid;place-items:center;z-index:3000;padding:18px}
+    .modal-card{width:min(620px,100%);max-height:92vh;overflow:auto;border-radius:26px;padding:24px}
+    .modal-head{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:18px}
+    .form-stack{display:grid;gap:12px}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .avatar-editor{display:flex;align-items:center;gap:16px;padding:14px;background:var(--bg);border-radius:16px}
+    .avatar-large{width:82px;height:82px;border-radius:50%;object-fit:cover;background:var(--surface-2);display:grid;place-items:center;font-size:30px;flex:none}
+    .profile-card{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center}
+    .profile-card .avatar-large{width:96px;height:96px}
+    .toast{position:fixed;right:18px;bottom:24px;z-index:5000;background:#2d1b12;color:white;border-radius:14px;padding:12px 16px;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);pointer-events:none;transition:.2s}
+    .toast.show{opacity:1;transform:none}
+    .skeleton{background:linear-gradient(90deg,var(--surface-2),var(--surface),var(--surface-2));background-size:200% 100%;animation:shimmer 1.2s linear infinite;border-radius:18px;min-height:280px}
+    @keyframes shimmer{to{background-position:-200% 0}}
+    .drawer{position:fixed;inset:0;background:rgba(45,27,18,.45);z-index:2900;display:flex;align-items:flex-end}
+    .drawer-body{width:100%;background:var(--surface);border-radius:28px 28px 0 0;padding:24px;max-height:90vh;overflow:auto}
+    .cook-step{font-size:clamp(22px,3vw,34px);line-height:1.45;max-width:900px;margin:28px auto;padding:26px;background:var(--bg);border-radius:22px}
+    .bottom-nav{display:none}
+    .hint{font-size:13px;color:var(--muted)}
+    .source-link{word-break:break-all;color:var(--brand);font-weight:700}
+    .danger-zone{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+    @media(max-width:1050px){
+      .nav-btn span{display:none}.recipe-grid{grid-template-columns:repeat(2,1fr)}
+      .hero{grid-template-columns:1fr}.detail-shell{grid-template-columns:1fr}.detail-media{min-height:320px}
+      .shopping-columns{grid-template-columns:1fr}.roulette-layout{grid-template-columns:1fr}
     }
-
-    textarea{width:100%;min-height:150px;resize:vertical}
-    select{width:100%;margin-top:14px;background:var(--cream)}
-
-
-    .primary{
-      color:white;
-      background:linear-gradient(135deg,var(--orange),var(--amber));
-      box-shadow:0 12px 30px rgba(255,107,53,.28);
+    @media(max-width:720px){
+      .topbar-inner{padding:9px 12px}.brand span,.nav{display:none}.account-btn .account-label{display:none}
+      main{padding:20px 12px 100px}.hero-main{padding:30px 22px;border-radius:24px}.hero-side{border-radius:24px}
+      .recipe-grid{grid-template-columns:1fr}.search-row{grid-template-columns:1fr 1fr}.search-row input{grid-column:1/-1}
+      .detail-columns,.roulette-result,.form-grid{grid-template-columns:1fr}.roulette-result .image{min-height:260px}
+      .detail-summary h1{font-size:36px}.week-grid{grid-template-columns:repeat(7,82vw)}
+      .stats{grid-template-columns:1fr 1fr}
+      .bottom-nav{display:flex;position:fixed;left:8px;right:8px;bottom:8px;z-index:1500;background:color-mix(in srgb,var(--surface) 95%,transparent);border:1px solid var(--line);border-radius:20px;padding:6px;box-shadow:var(--shadow);justify-content:space-around}
+      .bottom-nav button{background:transparent;color:var(--muted);display:grid;gap:2px;place-items:center;font-size:19px;padding:7px 10px;border-radius:14px}
+      .bottom-nav small{font-size:10px}.bottom-nav button.active{background:var(--surface-2);color:var(--brand)}
     }
-
-    .secondary{
-      background:var(--white);
-      color:var(--text);
-      box-shadow:var(--soft);
-    }
-
-    .muted,.meta,.week-empty{color:var(--muted)}
-
-    .top-nav{
-      position:sticky;
-      top:14px;
-      z-index:1000;
-      width:min(1120px,calc(100% - 28px));
-      margin:14px auto 0;
-      padding:10px;
-      display:flex;
-      gap:8px;
-      justify-content:center;
-      align-items:center;
-      overflow-x:auto;
-      background:rgba(255,255,255,.88);
-      backdrop-filter:blur(22px);
-      border:1px solid rgba(255,255,255,.6);
-      border-radius:28px;
-      box-shadow:var(--soft);
-    }
-
-    .top-nav button{
-      background:transparent;
-      color:var(--text);
-      display:flex;
-      align-items:center;
-      gap:8px;
-      padding:13px 18px;
-      box-shadow:none;
-      white-space:nowrap;
-    }
-
-    .top-nav button.active{
-      background:var(--white);
-      box-shadow:var(--soft);
-      color:var(--orange);
-    }
-
-    header{
-      width:min(1200px,calc(100% - 32px));
-      margin:28px auto 0;
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:18px;
-      padding:0 4px;
-    }
-
-    .brand{
-      display:flex;
-      align-items:center;
-      gap:14px;
-      font-size:28px;
-      font-weight:950;
-    }
-
-    .logo{
-      width:52px;
-      height:52px;
-      object-fit:cover;
-      border-radius:50%;
-    }
-
-    .header-actions{display:flex;gap:12px}
-
-    main{
-      width:min(1200px,calc(100% - 32px));
-      margin:34px auto 0;
-      padding-bottom:100px;
-    }
-
-    h1{
-      font-size:clamp(46px,6vw,78px);
-      line-height:.98;
-      letter-spacing:-.06em;
-      margin:24px 0 16px;
-      font-weight:950;
-    }
-
-    h2{margin:0;font-size:34px;letter-spacing:-.04em}
-
-    .hero{
-      position:relative;
-      overflow:hidden;
-      background:rgba(255,255,255,.92);
-      border-radius:32px;
-      padding:56px 52px;
-      box-shadow:var(--shadow);
-      margin-bottom:54px;
-    }
-
-    .hero::before{
-      content:"";
-      position:absolute;
-      width:330px;
-      height:330px;
-      right:-90px;
-      top:-130px;
-      border-radius:50%;
-      background:rgba(255,183,3,.18);
-    }
-
-    .hero > *{position:relative;z-index:1}
-
-    .hero-badge,.badge{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      background:#fff0e6;
-      color:#d95d20;
-      padding:10px 16px;
-      border-radius:999px;
-      font-weight:900;
-    }
-
-    .hero .muted{max-width:650px;font-size:20px;line-height:1.45;margin:0}
-
-    .hero-action-grid{
-      margin-top:34px;
-      display:grid;
-      grid-template-columns:repeat(3,1fr);
-      gap:24px;
-    }
-
-    .hero-action{
-      height:116px;
-      border-radius:24px;
-      display:flex;
-      align-items:center;
-      justify-content:flex-start;
-      gap:18px;
-      padding:26px;
-      font-size:34px;
-      text-align:left;
-    }
-
-    .hero-action span{display:flex;flex-direction:column;gap:4px}
-    .hero-action strong{font-size:23px}
-    .hero-action small{font-size:15px;font-weight:650;opacity:.75}
-
-    .section-head{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:28px}
-    .section-head .muted{margin:8px 0 0;font-size:17px}
-
-    .clean-recipe-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}
-
-    .card{
-      background:var(--white);
-      border-radius:26px;
-      overflow:hidden;
-      box-shadow:var(--shadow);
-      cursor:pointer;
-      position:relative;
-      transition:.25s ease;
-    }
-
-    .card:hover{transform:translateY(-4px)}
-    .card img,
-.week-image,
-.detail img,
-.roulette-image-wrap img{
-  width:100%;
-  object-fit:cover;
-  object-position:center;
-  display:block;
-  background:var(--cream);
-}
-
-.card img{
-  height:280px;
-  aspect-ratio:4 / 3;
-}
-
-    .card-body{padding:24px}
-    .card h3{margin:0;font-size:28px;line-height:1.12;min-height:64px;letter-spacing:-.04em}
-
-    .meta{display:flex;flex-wrap:wrap;gap:10px;font-size:16px;margin:14px 0 22px}
-    .full-btn{width:100%;height:58px;font-size:19px}
-
-    .favorite-row{position:absolute;top:16px;right:16px;z-index:10}
-    .favorite-btn{width:46px;height:46px;padding:0;border-radius:50%;background:rgba(255,255,255,.92);box-shadow:var(--soft)}
-
-    .home-benefits{margin-top:44px;padding:24px 30px;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);gap:24px}
-    .home-benefits div{display:grid;gap:4px}
-    .home-benefits span{color:var(--muted);font-size:14px}
-
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;margin-top:22px}
-    .card-actions,.buttons,.filters{display:flex;flex-wrap:wrap;gap:12px}
-    .filters{margin:18px 0}
-
-    .favorite-filter{display:flex;align-items:center;gap:8px;background:var(--white);padding:12px 16px;border-radius:14px;box-shadow:var(--soft)}
-
-    .placeholder{height:220px;background:linear-gradient(135deg,var(--orange),var(--amber));display:grid;place-items:center;color:white;font-weight:900}
-
-    .detail{background:var(--white);border-radius:32px;overflow:hidden;box-shadow:var(--shadow);margin-top:22px}
-    .detail img{
-  width:100%;
-  aspect-ratio: 16 / 9;
-  height:auto;
-  object-fit:cover;
-  object-position:center center;
-  display:block;
-}
-    .detail-body{padding:30px;display:flex;flex-direction:column;gap:18px}
-    .columns{display:grid;grid-template-columns:.8fr 1.2fr;gap:28px}
-
-    .ingredients,.steps,.shopping-list{display:grid;gap:12px}
-    .ingredient,.step,.shopping-item,.chip{background:var(--cream);padding:14px 16px;border-radius:16px;box-shadow:0 6px 18px rgba(90,40,15,.06);font-weight:650}
-
-    .ingredient-builder{display:grid;gap:10px}
-    .ingredient-main{font-weight:900}
-    .ingredient-alt-box{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:14px}
-    .ingredient-alt-box span{color:var(--muted);font-weight:850}
-    .alt-btn{padding:7px 11px;border-radius:999px;background:#ecfdf3;color:#067647;box-shadow:none;font-size:13px}
-    .alt-btn:hover{transform:translateY(-1px)}
-
-    .chips{display:flex;flex-wrap:wrap;gap:12px}
-    .shopping-item{display:flex;align-items:center;gap:12px}
-    .shopping-item:has(input:checked){opacity:.55;text-decoration:line-through}
-    .week-image{
-  width:100%;
-  aspect-ratio: 16 / 10;
-  height:auto;
-  object-fit:cover;
-  object-position:center center;
-  border-radius:18px;
-  margin-bottom:14px;
-}
-    .week-title{font-size:18px;font-weight:850}
-
-    .rating{display:flex;gap:6px;flex-wrap:wrap}
-    .rating button{background:var(--cream);padding:8px 10px;border-radius:12px;font-size:22px;box-shadow:none}
-
-    .toast{position:fixed;top:20px;right:20px;background:var(--text);color:white;padding:14px 18px;border-radius:16px;opacity:0;transform:translateY(-10px);transition:.25s;z-index:3000}
-    .toast.show{opacity:1;transform:translateY(0)}
-
-    .empty-state,.panel,.rescue-card{background:var(--white);border-radius:32px;padding:30px;box-shadow:var(--soft)}
-    .error-box{background:#fff0f0;color:#b42318;border:2px solid #fda29b;border-radius:24px;padding:24px;margin-top:20px;font-weight:700}
-
-    .skeleton-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:22px}
-    .skeleton-card{height:320px;border-radius:32px;background:linear-gradient(90deg,#f7e7dc 25%,#fff7f2 50%,#f7e7dc 75%);background-size:200% 100%;animation:skeleton 1.4s infinite linear}
-    @keyframes skeleton{0%{background-position:200% 0}100%{background-position:-200% 0}}
-
-    .drawer{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:flex-end;z-index:2500}
-    .drawer.show{display:flex}
-    .drawer-content{background:white;width:100%;max-height:90vh;overflow:auto;border-radius:28px 28px 0 0;padding:24px}
-    .cook-step{font-size:24px;line-height:1.5;background:var(--cream);padding:24px;border-radius:24px}
-    .hidden{display:none}
-
-    .clean-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .clean-actions button{width:100%;padding:13px 14px}
-    .card .meta{min-height:22px}
-    .back-btn{margin-bottom:22px}
-
-    /* Roulette Premium Layout */
-    .roulette-page{max-width:1080px;margin:0 auto}
-
-    .roulette-header{
-      background:rgba(255,255,255,.92);
-      border-radius:34px;
-      padding:42px;
-      box-shadow:var(--shadow);
-      margin-bottom:24px;
-    }
-
-    .roulette-header h1{margin:18px 0 10px}
-
-    .roulette-shell{
-      display:grid;
-      grid-template-columns:1fr 170px;
-      gap:28px;
-      align-items:center;
-      margin-bottom:30px;
-    }
-
-    .meal-filter-panel{
-      background:rgba(255,255,255,.55);
-      border:1px solid rgba(255,255,255,.72);
-      border-radius:34px;
-      padding:22px;
-      box-shadow:var(--soft);
-    }
-
-    .meal-filter-title{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      margin-bottom:18px;
-      color:var(--muted);
-      font-size:14px;
-      font-weight:900;
-      text-transform:uppercase;
-      letter-spacing:.04em;
-    }
-
-    .meal-filter-wrap{
-  display:grid;
-  grid-template-columns:repeat(5, 1fr);
-  gap:20px 22px;
-  align-items:start;
-  justify-items:center;
-}
-
-    .meal-circle{
-      all:unset;
-      cursor:pointer;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:flex-start;
-      text-align:center;
-      gap:9px;
-      min-height:104px;
-      border-radius:28px;
-      transition:.22s ease;
-    }
-
-    .meal-circle .meal-icon{
-      width:70px;
-      height:70px;
-      min-width:70px;
-      min-height:70px;
-      border-radius:50%;
-      background:var(--white);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-size:30px;
-      line-height:1;
-      box-shadow:0 12px 30px rgba(90,40,15,.12);
-      transition:.22s ease;
-    }
-
-    .meal-circle span{font-size:14px;font-weight:900;color:var(--text)}
-    .meal-circle:hover .meal-icon{transform:translateY(-4px)}
-    .meal-circle.active .meal-icon{background:linear-gradient(135deg,var(--orange),var(--amber));color:#fff;box-shadow:0 16px 38px rgba(255,107,53,.35)}
-    .meal-circle.active span{color:var(--orange)}
-
-    .roulette-draw-btn{
-      all:unset;
-      cursor:pointer;
-      width:168px;
-      height:168px;
-      border-radius:50%;
-      background:linear-gradient(135deg,var(--orange),var(--amber));
-      color:#fff;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      gap:10px;
-      text-align:center;
-      font-weight:950;
-      box-shadow:0 24px 50px rgba(255,107,53,.3);
-      transition:.22s ease;
-    }
-
-    .roulette-draw-btn:hover{transform:translateY(-4px) scale(1.02)}
-    .roulette-draw-btn:active{transform:scale(.97)}
-    .roulette-draw-btn .dice{font-size:32px}
-    .roulette-draw-btn span{font-size:17px;line-height:1.15}
-
-    .roulette-result-card{
-      display:grid;
-      grid-template-columns:1.05fr .95fr;
-      min-height:380px;
-      overflow:hidden;
-      background:var(--white);
-      border-radius:34px;
-      box-shadow:var(--shadow);
-    }
-
-    .roulette-image-wrap{min-height:380px;background:var(--cream);overflow:hidden}
-    .roulette-image-wrap img,
-.roulette-image-wrap .placeholder{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  object-position:center center;
-  display:block;
-}
-
-    .roulette-result-body{padding:48px;display:flex;flex-direction:column;justify-content:center;gap:4px}
-    .roulette-result-body h2{font-size:42px;line-height:1.05;margin:18px 0;letter-spacing:-.05em}
-
-    /* Dark mode */
-    body.dark{
-      --bg:#120b08;
-      --text:#fff7ed;
-      --muted:#d8b49c;
-      --white:#24140d;
-      --cream:#3a2115;
-      --line:rgba(255,255,255,.1);
-      background:linear-gradient(135deg,#120b08,#2d1b12);
-      color:var(--text);
-    }
-
-    body.dark .top-nav{background:rgba(45,27,18,.88);border-color:rgba(255,255,255,.08)}
-    body.dark .top-nav button{color:#fff7ed}
-    body.dark .top-nav button.active{background:#3a2115;color:#ff9f1c}
-    body.dark .hero,body.dark .panel,body.dark .empty-state,body.dark .rescue-card,body.dark .detail,body.dark .card,body.dark .roulette-header,body.dark .roulette-result-card,body.dark .drawer-content,body.dark .modal-box{background:#24140d;color:#fff7ed}
-    body.dark .meal-filter-panel{background:rgba(36,20,13,.62);border-color:rgba(255,255,255,.08)}
-    body.dark .hero-badge,body.dark .badge{background:#3a2115;color:#ff9f1c}
-    body.dark .secondary{background:#3a2115;color:#fff7ed;box-shadow:0 8px 24px rgba(0,0,0,.28)}
-    body.dark .modal-grid button{background:#3a2115;color:#fff7ed}
-    body.dark .card-body{background:#24140d}
-    body.dark .meta,body.dark .muted,body.dark .week-empty{color:#d8b49c}
-    body.dark .home-benefits{border-top-color:rgba(255,255,255,.1)}
-    body.dark .home-benefits span{color:#d8b49c}
-    body.dark .placeholder{background:linear-gradient(135deg,#5b2a18,#8a3f1d)}
-    body.dark input,body.dark select,body.dark textarea,body.dark .favorite-filter{background:#1a0f0a;color:#fff7ed;box-shadow:0 8px 24px rgba(0,0,0,.25)}
-    body.dark input::placeholder,body.dark textarea::placeholder{color:#a9826a}
-    body.dark .ingredient,body.dark .step,body.dark .shopping-item,body.dark .chip,body.dark .cook-step,body.dark .rating button{background:#3a2115;color:#fff7ed}
-    body.dark .favorite-btn{background:#3a2115;color:#fff7ed}
-    body.dark .meal-circle .meal-icon{background:#2a1811;color:#fff7ed}
-    body.dark .meal-circle.active .meal-icon{background:linear-gradient(135deg,var(--orange),var(--amber));color:#fff}
-    body.dark .error-box{background:#3a120f;color:#ffb4a8;border-color:#7a271a}
-    body.dark .skeleton-card{background:linear-gradient(90deg,#24140d 25%,#3a2115 50%,#24140d 75%);background-size:200% 100%}
-    body.dark .drawer{background:rgba(0,0,0,.65)}
-
-    @media(max-width:900px){
-      header{flex-direction:column;align-items:flex-start}
-      .header-actions{width:100%;justify-content:space-between}
-      .hero{padding:34px 24px}
-      .hero-action-grid,.clean-recipe-grid,.home-benefits,.columns{grid-template-columns:1fr}
-      .detail img{height:280px}
-      .roulette-shell{grid-template-columns:1fr}
-      .roulette-draw-btn{width:100%;height:64px;border-radius:999px;flex-direction:row}
-      .roulette-draw-btn .dice{font-size:22px}
-      .roulette-result-card{grid-template-columns:1fr}
-      .roulette-image-wrap img,.roulette-image-wrap .placeholder{min-height:260px;height:260px}
-      .roulette-result-body{padding:28px}
-    }
-
-    @media(max-width:560px){
-      main{width:min(100% - 22px,1200px)}
-      .roulette-header{padding:28px 22px}
-      .meal-filter-panel{padding:18px 14px}
-      .meal-filter-wrap{grid-template-columns:repeat(3,1fr);gap:14px 8px}
-      .meal-circle .meal-icon{width:62px;height:62px;min-width:62px;min-height:62px;font-size:26px}
-      .meal-circle span{font-size:13px}
-      h1{font-size:44px}
-    }
-
-    .modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.45);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 9999;
-}
-
-.modal.hidden { display: none; }
-
-.modal-box {
-  background: var(--white);
-  color: var(--text);
-  padding: 24px;
-  border-radius: 20px;
-  width: 90%;
-  max-width: 500px;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.2);
-}
-
-.modal-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.modal-grid button {
-  padding: 12px;
-  border: none;
-  border-radius: 14px;
-  background: #f3f3f3;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-.modal-grid button:hover {
-  background: #e5e5e5;
-}
   </style>
+
+<style>
+body:not(.dark) input,
+body:not(.dark) select,
+body:not(.dark) textarea{background:#fffaf7}
+
+body:not(.dark) .topbar{background:rgba(255,247,237,.92)}
+body:not(.dark) .nav-btn:hover,
+body:not(.dark) .nav-btn.active{background:#fff0e3}
+body:not(.dark) .secondary-btn,
+body:not(.dark) .icon-btn{background:#fff7ed}
+body:not(.dark) .hero-main,
+body:not(.dark) .card,
+body:not(.dark) .panel,
+body:not(.dark) .modal-card{background:#fffaf5}
+</style>
+
 </head>
-
 <body>
-  <div id="toast" class="toast"></div>
-
-  <nav class="top-nav">
-    <button data-nav="home" onclick="showHome()">🏠<span>Home</span></button>
-    <button data-nav="recipes" onclick="loadRecipes()">🍲<span>Rezepte</span></button>
-    <button data-nav="favorites" onclick="loadFavorites()">❤️<span>Favoriten</span></button>
-    <button data-nav="recent" onclick="loadRecentRecipes()">🕘<span>Zuletzt</span></button>
-    <button data-nav="plan" onclick="loadWeeklyPlan()">📅<span>Plan</span></button>
-    <button data-nav="list" onclick="loadShoppingList()">🛒<span>Liste</span></button>
-    <button data-nav="rescue" onclick="loadFoodRescue()">♻️<span>Rescue</span></button>
-    <button data-nav="import" onclick="loadRecipeImport()">🔗<span>Import</span></button>
-  </nav>
-
-  <header>
-    <div class="brand">
-      <img src="/static/images/Rezeptroulette.png" class="logo" alt="Logo">
-      <span>Rezeptroulette</span>
-    </div>
-    <div class="header-actions">
-      <button class="secondary" onclick="showHome()">Startseite</button>
-      <button class="secondary" id="accountButton" onclick="openAccountModal()">👤 Anmelden</button>
-      <button class="secondary" onclick="toggleDarkMode()">🌙</button>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar-inner">
+      <button class="ghost-btn brand" onclick="showHome()" aria-label="Startseite">
+        <img src="/static/images/Rezeptroulette.png" alt="">
+        <span>Rezeptroulette</span>
+      </button>
+      <nav class="nav" aria-label="Hauptnavigation">
+        <button class="nav-btn active" data-nav="home" onclick="showHome()">⌂ <span>Start</span></button>
+        <button class="nav-btn" data-nav="recipes" onclick="loadRecipes()">🍲 <span>Rezepte</span></button>
+        <button class="nav-btn" data-nav="roulette" onclick="loadRoulette()">🎲 <span>Roulette</span></button>
+        <button class="nav-btn" data-nav="plan" onclick="loadWeeklyPlan()">📅 <span>Plan</span></button>
+        <button class="nav-btn" data-nav="list" onclick="loadShoppingList()">🛒 <span>Liste</span></button>
+        <button class="nav-btn" data-nav="rescue" onclick="loadFoodRescue()">♻️ <span>Rescue</span></button>
+      </nav>
+      <button class="secondary-btn account-btn" id="accountButton" onclick="openAccountModal()">
+        <span class="avatar-mini" id="headerAvatar">👤</span>
+        <span class="account-label">Anmelden</span>
+      </button>
+      <button class="icon-btn" onclick="toggleDarkMode()" id="themeButton" aria-label="Darstellung wechseln">🌙</button>
     </div>
   </header>
 
   <main>
-    <section class="hero" id="home">
-      <div class="hero-badge">🍽️ Rezeptroulette</div>
-      <h1>Was essen wir heute?</h1>
-      <p class="muted">Finde schnell ein Rezept, entdecke neue Gerichte oder rette Lebensmittel aus deinem Kühlschrank.</p>
-
-      <div class="hero-action-grid">
-        <button class="hero-action primary" onclick="loadRoulette()">
-          🎲 <span><strong>Rezept ziehen</strong><small>Zufälliges Rezept entdecken</small></span>
-        </button>
-        <button class="hero-action secondary" onclick="loadRecipes()">
-          🍲 <span><strong>Alle Rezepte</strong><small>Alle Rezepte ansehen</small></span>
-        </button>
-        <button class="hero-action secondary" onclick="loadFoodRescue()">
-          ♻️ <span><strong>Food Rescue</strong><small>Rette Lebensmittel</small></span>
-        </button>
+    <section id="homeSection">
+      <div class="hero">
+        <div class="hero-main">
+          <span class="eyebrow">🍽️ Schnell entscheiden. Besser planen.</span>
+          <h1>Was darf heute auf den Tisch?</h1>
+          <p class="lead">Entdecke passende Rezepte, lass den Zufall entscheiden oder plane deine ganze Woche mit Einkaufsliste.</p>
+          <div class="hero-actions">
+            <button class="primary-btn" onclick="loadRoulette()">🎲 Rezept ziehen</button>
+            <button class="secondary-btn" onclick="loadRecipes()">Rezepte entdecken</button>
+          </div>
+        </div>
+        <div class="hero-side">
+          <button class="quick-tile" onclick="loadWeeklyPlan()"><span class="qicon">📅</span><span><strong>Wochenplan</strong><small>Frühstück, Mittag & Abend</small></span><span>→</span></button>
+          <button class="quick-tile" onclick="loadShoppingList()"><span class="qicon">🛒</span><span><strong>Einkaufsliste</strong><small>Automatisch aus deinem Plan</small></span><span>→</span></button>
+          <button class="quick-tile" onclick="loadFoodRescue()"><span class="qicon">♻️</span><span><strong>Food Rescue</strong><small>Mit vorhandenen Zutaten kochen</small></span><span>→</span></button>
+          <button class="quick-tile" onclick="loadFavorites()"><span class="qicon">❤️</span><span><strong>Favoriten</strong><small>Deine gespeicherten Rezepte</small></span><span>→</span></button>
+        </div>
       </div>
+      <div id="homeContent"></div>
     </section>
-
     <section id="content"></section>
   </main>
 
-  <div class="drawer" id="cookDrawer">
-    <div class="drawer-content">
-      <button class="secondary" onclick="closeCookMode()">Schließen</button>
-      <h2 id="cookTitle">Kochmodus</h2>
-      <div class="cook-step" id="cookStep"></div>
-      <div class="buttons">
-        <button class="secondary" onclick="previousCookStep()">← Zurück</button>
-        <button class="primary" onclick="nextCookStep()">Weiter →</button>
-      </div>
+  <nav class="bottom-nav" aria-label="Mobile Navigation">
+    <button data-mobile-nav="home" onclick="showHome()">⌂<small>Start</small></button>
+    <button data-mobile-nav="recipes" onclick="loadRecipes()">🍲<small>Rezepte</small></button>
+    <button data-mobile-nav="roulette" onclick="loadRoulette()">🎲<small>Roulette</small></button>
+    <button data-mobile-nav="plan" onclick="loadWeeklyPlan()">📅<small>Plan</small></button>
+    <button data-mobile-nav="list" onclick="loadShoppingList()">🛒<small>Liste</small></button>
+  </nav>
+</div>
+
+<div class="modal hidden" id="accountModal" onclick="if(event.target===this) closeAccountModal()">
+  <div class="modal-card" id="accountModalContent"></div>
+</div>
+
+<div class="modal hidden" id="planModal" onclick="if(event.target===this) closePlanModal()">
+  <div class="modal-card" id="planModalContent"></div>
+</div>
+
+<div class="drawer hidden" id="cookDrawer">
+  <div class="drawer-body">
+    <div class="modal-head"><h2 id="cookTitle">Kochmodus</h2><button class="icon-btn" onclick="closeCookMode()">✕</button></div>
+    <div class="cook-step" id="cookStep"></div>
+    <div class="button-row" style="justify-content:center">
+      <button class="secondary-btn" onclick="previousCookStep()">← Zurück</button>
+      <button class="primary-btn" onclick="nextCookStep()">Weiter →</button>
     </div>
   </div>
+</div>
 
-  <script>
-    let allRecipes = [];
-    let favorites = JSON.parse(localStorage.getItem("favorites") || "[]").map(Number);
-    let ratings = JSON.parse(localStorage.getItem("ratings") || "{}");
-    let recentRecipes = JSON.parse(localStorage.getItem("recentRecipes") || "[]");
-    let pantry = JSON.parse(localStorage.getItem("pantry") || "[]");
-    let atHomeIngredients = JSON.parse(localStorage.getItem("atHomeIngredients") || "[]");
-    let currentUser = null;
-    let cookSteps = [];
-    let recipeScrollPosition = 0;
-    let previousView = "recipes";
-    let selectedMealType = "Alle";
-    let cookIndex = 0;
-    let rouletteHistory = JSON.parse(localStorage.getItem("rouletteHistory") || "[]").map(Number);
-    let selectedWeekSlotFilter = "Alle";
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-function setWeekSlotFilter(slot){
-  selectedWeekSlotFilter = slot;
-  loadWeeklyPlan();
-}
+<script>
+const state = {
+  recipes: [], user: null, favorites: [], ratings: {}, pantry: [], atHome: [], eaten: [],
+  recipeFilter: "Alle", rouletteFilter: "Alle", currentView: "home", recent: JSON.parse(localStorage.getItem("recentRecipes") || "[]"),
+  cookSteps: [], cookIndex: 0, rouletteHistory: JSON.parse(localStorage.getItem("rouletteHistory") || "[]").map(Number)
+};
 
-async function requestJson(url, options = {}){
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...(options.body ? {"Content-Type":"application/json"} : {}),
-      ...(options.headers || {})
-    }
-  });
+const CATEGORIES = ["Alle","Frühstück","Mittagessen","Abendbrot","Nudeln","Reis","Auflauf","Suppe","Vegetarisch","Snack","Dessert"];
+const DAYS = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"];
+const SLOTS = [{id:1,name:"Frühstück"},{id:2,name:"Mittag"},{id:3,name:"Abend"}];
 
-  let data = null;
-  try{ data = await response.json(); }catch(_){ }
+function escapeHtml(v){return String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")}
+function cleanText(v){return String(v||"").replace(/\s+/g," ").trim()}
+function imageUrl(r){const raw=r?.bild||r?.image||r?.image_url||"";if(!raw)return"";return raw.startsWith("http")?raw:`/static/images/${raw}`}
+function showToast(msg){const t=document.getElementById("toast");t.textContent=msg;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2400)}
+function setView(name){state.currentView=name;document.getElementById("homeSection").classList.toggle("hidden",name!=="home");document.getElementById("content").classList.toggle("hidden",name==="home");document.querySelectorAll("[data-nav]").forEach(b=>b.classList.toggle("active",b.dataset.nav===name));document.querySelectorAll("[data-mobile-nav]").forEach(b=>b.classList.toggle("active",b.dataset.mobileNav===name));window.scrollTo({top:0,behavior:"smooth"})}
+function skeleton(){return `<div class="recipe-grid"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>`}
 
-  if(!response.ok){
-    throw new Error(data?.detail || data?.error || `Fehler ${response.status}`);
-  }
+async function requestJson(url,options={}){
+  const res=await fetch(url,{...options,headers:{...(options.body?{"Content-Type":"application/json"}:{}),...(options.headers||{})}});
+  let data=null;try{data=await res.json()}catch(_){}
+  if(!res.ok)throw new Error(data?.detail||data?.error||`Fehler ${res.status}`);
   return data;
 }
 
-function updateAccountButton(){
-  const button = document.getElementById("accountButton");
-  if(!button) return;
-  button.textContent = currentUser ? `👤 ${currentUser.email}` : "👤 Anmelden";
+async function ensureRecipes(force=false){
+  if(force||!state.recipes.length)state.recipes=await requestJson("/rezepte");
+  return state.recipes;
+}
+
+function avatarMarkup(user,cls="avatar-mini"){
+  if(!user)return `<span class="${cls}">👤</span>`;
+  return `<img class="${cls}" src="${escapeHtml(user.avatar_url)}?v=${Date.now()}" alt="" onerror="this.outerHTML='<span class=&quot;${cls}&quot;>👤</span>'">`;
+}
+
+function updateAccountUI(){
+  const btn=document.getElementById("accountButton");
+  if(state.user){
+    btn.innerHTML=`${avatarMarkup(state.user)}<span class="account-label">${escapeHtml(state.user.display_name||state.user.username)}</span>`;
+  }else{
+    btn.innerHTML=`<span class="avatar-mini">👤</span><span class="account-label">Anmelden</span>`;
+  }
 }
 
 async function initializeAuth(){
   try{
-    currentUser = await requestJson("/auth/me");
-    await loadUserState();
+    state.user=await requestJson("/auth/me");
+    const s=await requestJson("/user-state");
+    state.favorites=(s.favorites||[]).map(Number);state.ratings=s.ratings||{};state.pantry=s.pantry||[];state.atHome=s.at_home||[];state.eaten=s.eaten||[];
+    if(s.preferences?.theme==="dark")document.body.classList.add("dark");
   }catch(_){
-    currentUser = null;
-    favorites = JSON.parse(localStorage.getItem("favorites") || "[]").map(Number);
-    ratings = JSON.parse(localStorage.getItem("ratings") || "{}");
-    pantry = JSON.parse(localStorage.getItem("pantry") || "[]");
-    atHomeIngredients = JSON.parse(localStorage.getItem("atHomeIngredients") || "[]");
+    state.user=null;
+    state.favorites=JSON.parse(localStorage.getItem("favorites")||"[]").map(Number);
+    state.ratings=JSON.parse(localStorage.getItem("ratings")||"{}");
+    state.pantry=JSON.parse(localStorage.getItem("pantry")||"[]");
+    state.atHome=JSON.parse(localStorage.getItem("atHomeIngredients")||"[]");
+    state.eaten=JSON.parse(localStorage.getItem("eatenHistory")||"[]");
   }
-  updateAccountButton();
+  updateAccountUI();
 }
 
-async function loadUserState(){
-  if(!currentUser) return;
-  const state = await requestJson("/user-state");
-  favorites = (state.favorites || []).map(Number);
-  ratings = state.ratings || {};
-  pantry = state.pantry || [];
-  atHomeIngredients = state.at_home || [];
-}
-
-function openAccountModal(mode = "login"){
-  const modal = document.getElementById("accountModal");
-  const content = document.getElementById("accountModalContent");
-  if(!modal || !content) return;
-
-  if(currentUser){
-    content.innerHTML = `
-      <h2>👤 Mein Konto</h2>
-      <p class="muted">Angemeldet als</p>
-      <p><strong>${escapeHtml(currentUser.email)}</strong></p>
-      <div class="buttons" style="margin-top:18px;">
-        <button class="primary" onclick="showPasswordChange()">Passwort ändern</button>
-        <button class="secondary" onclick="logoutUser()">Abmelden</button>
-        <button class="secondary" onclick="deleteAccount()">Konto löschen</button>
+function openAccountModal(mode="login"){
+  const modal=document.getElementById("accountModal"),c=document.getElementById("accountModalContent");
+  if(state.user){
+    c.innerHTML=`
+      <div class="modal-head"><div><span class="eyebrow">Mein Bereich</span><h2 style="margin-top:8px">Profil & Konto</h2></div><button class="icon-btn" onclick="closeAccountModal()">✕</button></div>
+      <div class="profile-card">
+        ${avatarMarkup(state.user,"avatar-large")}
+        <div><h3>${escapeHtml(state.user.display_name||state.user.username)}</h3><div class="hint">@${escapeHtml(state.user.username)} · ${escapeHtml(state.user.email)}</div><p>${escapeHtml(state.user.bio||"Noch keine Profilbeschreibung.")}</p></div>
+      </div>
+      <div class="button-row" style="margin-top:16px">
+        <button class="primary-btn" onclick="showProfileEdit()">Profil bearbeiten</button>
+        <button class="secondary-btn" onclick="showPasswordChange()">Passwort ändern</button>
+      </div>
+      <div class="stats">
+        <div class="stat-card"><strong>${state.favorites.length}</strong><span>Favoriten</span></div>
+        <div class="stat-card"><strong>${state.eaten.length}</strong><span>Gegessen</span></div>
+        <div class="stat-card"><strong>${state.pantry.length}</strong><span>Vorräte</span></div>
+        <div class="stat-card"><strong>${Object.keys(state.ratings).length}</strong><span>Bewertungen</span></div>
+      </div>
+      <div class="danger-zone">
+        <div class="button-row">
+          <button class="secondary-btn" onclick="logoutUser()">Abmelden</button>
+          <button class="secondary-btn" onclick="logoutAll()">Auf allen Geräten abmelden</button>
+          <button class="danger-btn" onclick="deleteAccount()">Konto löschen</button>
+        </div>
       </div>`;
-  }else if(mode === "register"){
-    content.innerHTML = `
-      <h2>✨ Konto erstellen</h2>
-      <p class="muted">Speichere Wochenplan, Favoriten und Vorrat geräteübergreifend.</p>
-      <input id="authEmail" type="email" autocomplete="email" placeholder="E-Mail" style="width:100%;margin:10px 0;">
-      <input id="authPassword" type="password" autocomplete="new-password" placeholder="Passwort (mind. 8 Zeichen)" style="width:100%;margin:10px 0;">
-      <button class="primary full-btn" onclick="registerUser()">Registrieren</button>
-      <button class="secondary full-btn" style="margin-top:10px;" onclick="openAccountModal('login')">Schon ein Konto? Anmelden</button>`;
+  }else if(mode==="register"){
+    c.innerHTML=`
+      <div class="modal-head"><div><span class="eyebrow">Neu dabei</span><h2 style="margin-top:8px">Konto erstellen</h2></div><button class="icon-btn" onclick="closeAccountModal()">✕</button></div>
+      <form class="form-stack" onsubmit="registerUser(event)">
+        <label class="field"><span>Benutzername</span><input id="regUsername" autocomplete="username" required minlength="3" maxlength="30" placeholder="z. B. christian"></label>
+        <label class="field"><span>Anzeigename</span><input id="regDisplayName" autocomplete="name" maxlength="80" placeholder="z. B. Christian"></label>
+        <label class="field"><span>E-Mail</span><input id="regEmail" type="email" autocomplete="email" required placeholder="name@beispiel.de"></label>
+        <label class="field"><span>Passwort</span><input id="regPassword" type="password" autocomplete="new-password" required minlength="8" placeholder="Mindestens 8 Zeichen"></label>
+        <button class="primary-btn" type="submit">Konto erstellen</button>
+      </form>
+      <button class="ghost-btn" style="width:100%;margin-top:10px" onclick="openAccountModal('login')">Schon registriert? Anmelden</button>`;
   }else{
-    content.innerHTML = `
-      <h2>👤 Anmelden</h2>
-      <p class="muted">Deine persönlichen Daten werden deinem Konto zugeordnet.</p>
-      <input id="authEmail" type="email" autocomplete="email" placeholder="E-Mail" style="width:100%;margin:10px 0;">
-      <input id="authPassword" type="password" autocomplete="current-password" placeholder="Passwort" style="width:100%;margin:10px 0;">
-      <button class="primary full-btn" onclick="loginUser()">Anmelden</button>
-      <button class="secondary full-btn" style="margin-top:10px;" onclick="openAccountModal('register')">Konto erstellen</button>`;
+    c.innerHTML=`
+      <div class="modal-head"><div><span class="eyebrow">Willkommen zurück</span><h2 style="margin-top:8px">Anmelden</h2></div><button class="icon-btn" onclick="closeAccountModal()">✕</button></div>
+      <form class="form-stack" onsubmit="loginUser(event)">
+        <label class="field"><span>Benutzername oder E-Mail</span><input id="loginIdentifier" autocomplete="username" required autofocus placeholder="Benutzername oder E-Mail"></label>
+        <label class="field"><span>Passwort</span><input id="loginPassword" type="password" autocomplete="current-password" required placeholder="Passwort"></label>
+        <button class="primary-btn" type="submit">Anmelden</button>
+      </form>
+      <p class="hint" style="margin-top:10px">Tipp: Im Passwortfeld reicht Enter – der Anmeldevorgang startet sofort.</p>
+      <button class="ghost-btn" style="width:100%;margin-top:8px" onclick="openAccountModal('register')">Noch kein Konto? Konto erstellen</button>`;
   }
-
   modal.classList.remove("hidden");
+  setTimeout(()=>c.querySelector("input[autofocus]")?.focus(),20);
 }
+function closeAccountModal(){document.getElementById("accountModal").classList.add("hidden")}
 
-function closeAccountModal(){
-  document.getElementById("accountModal")?.classList.add("hidden");
+async function registerUser(event){
+  event?.preventDefault();
+  const payload={username:regUsername.value.trim(),display_name:regDisplayName.value.trim(),email:regEmail.value.trim(),password:regPassword.value};
+  try{state.user=await requestJson("/auth/register",{method:"POST",body:JSON.stringify(payload)});await syncGuestState();updateAccountUI();closeAccountModal();showToast("Konto erstellt.");renderHome()}catch(e){showToast(e.message)}
 }
-
-async function syncGuestStateToAccount(){
-  if(!currentUser) return;
-  const guestFavorites = JSON.parse(localStorage.getItem("favorites") || "[]").map(Number);
-  const guestRatings = JSON.parse(localStorage.getItem("ratings") || "{}");
-  const guestPantry = JSON.parse(localStorage.getItem("pantry") || "[]");
-  const guestAtHome = JSON.parse(localStorage.getItem("atHomeIngredients") || "[]");
-
-  const existing = await requestJson("/user-state");
-  const existingFavs = new Set((existing.favorites || []).map(Number));
-  for(const id of guestFavorites){
-    if(!existingFavs.has(id)){
-      try{ await requestJson(`/favorites/${id}/toggle`, {method:"POST"}); }catch(_){ }
-    }
-  }
-  for(const [id, value] of Object.entries(guestRatings)){
-    if(Number(value) >= 1 && Number(value) <= 5){
-      try{ await requestJson(`/ratings/${Number(id)}`, {method:"PUT", body:JSON.stringify({rating:Number(value)})}); }catch(_){ }
-    }
-  }
-  if(guestPantry.length){
-    await requestJson("/pantry", {method:"PUT", body:JSON.stringify({items:guestPantry})});
-  }
-  if(guestAtHome.length){
-    await requestJson("/at-home", {method:"PUT", body:JSON.stringify({items:guestAtHome})});
-  }
+async function loginUser(event){
+  event?.preventDefault();
+  try{state.user=await requestJson("/auth/login",{method:"POST",body:JSON.stringify({identifier:loginIdentifier.value.trim(),password:loginPassword.value})});await loadUserState();updateAccountUI();closeAccountModal();showToast("Willkommen zurück.");renderHome()}catch(e){showToast(e.message)}
+}
+async function loadUserState(){if(!state.user)return;const s=await requestJson("/user-state");state.favorites=(s.favorites||[]).map(Number);state.ratings=s.ratings||{};state.pantry=s.pantry||[];state.atHome=s.at_home||[];state.eaten=s.eaten||[]}
+async function syncGuestState(){
+  if(!state.user)return;
+  const guestFav=JSON.parse(localStorage.getItem("favorites")||"[]").map(Number);
+  const guestRatings=JSON.parse(localStorage.getItem("ratings")||"{}");
+  const current=await requestJson("/user-state"),existing=new Set((current.favorites||[]).map(Number));
+  for(const id of guestFav)if(!existing.has(id))try{await requestJson(`/favorites/${id}/toggle`,{method:"POST"})}catch(_){}
+  for(const [id,r] of Object.entries(guestRatings))if(+r>=1&&+r<=5)try{await requestJson(`/ratings/${id}`,{method:"PUT",body:JSON.stringify({rating:+r})})}catch(_){}
+  const pantry=JSON.parse(localStorage.getItem("pantry")||"[]"),atHome=JSON.parse(localStorage.getItem("atHomeIngredients")||"[]");
+  if(pantry.length)await requestJson("/pantry",{method:"PUT",body:JSON.stringify({items:pantry})});
+  if(atHome.length)await requestJson("/at-home",{method:"PUT",body:JSON.stringify({items:atHome})});
   await loadUserState();
 }
-
-async function registerUser(){
-  const email = document.getElementById("authEmail")?.value.trim() || "";
-  const password = document.getElementById("authPassword")?.value || "";
-  try{
-    currentUser = await requestJson("/auth/register", {method:"POST", body:JSON.stringify({email,password})});
-    await syncGuestStateToAccount();
-    updateAccountButton();
-    closeAccountModal();
-    showToast("Konto erstellt und angemeldet!");
-    renderHomeSections();
-  }catch(error){ showToast(error.message); }
-}
-
-async function loginUser(){
-  const email = document.getElementById("authEmail")?.value.trim() || "";
-  const password = document.getElementById("authPassword")?.value || "";
-  try{
-    currentUser = await requestJson("/auth/login", {method:"POST", body:JSON.stringify({email,password})});
-    await loadUserState();
-    updateAccountButton();
-    closeAccountModal();
-    showToast("Angemeldet!");
-    renderHomeSections();
-  }catch(error){ showToast(error.message); }
-}
-
-async function logoutUser(){
-  try{ await requestJson("/auth/logout", {method:"POST"}); }catch(_){ }
-  currentUser = null;
-  favorites = JSON.parse(localStorage.getItem("favorites") || "[]").map(Number);
-  ratings = JSON.parse(localStorage.getItem("ratings") || "{}");
-  pantry = JSON.parse(localStorage.getItem("pantry") || "[]");
-  atHomeIngredients = JSON.parse(localStorage.getItem("atHomeIngredients") || "[]");
-  updateAccountButton();
-  closeAccountModal();
-  showToast("Abgemeldet");
-  showHome();
-}
-
-function showPasswordChange(){
-  const content = document.getElementById("accountModalContent");
-  if(!content) return;
-  content.innerHTML = `
-    <h2>🔐 Passwort ändern</h2>
-    <input id="currentPassword" type="password" autocomplete="current-password" placeholder="Aktuelles Passwort" style="width:100%;margin:10px 0;">
-    <input id="newPassword" type="password" autocomplete="new-password" placeholder="Neues Passwort (mind. 8 Zeichen)" style="width:100%;margin:10px 0;">
-    <button class="primary full-btn" onclick="changePassword()">Passwort speichern</button>
-    <button class="secondary full-btn" style="margin-top:10px;" onclick="openAccountModal()">Zurück</button>`;
-}
-
-async function changePassword(){
-  const current_password = document.getElementById("currentPassword")?.value || "";
-  const new_password = document.getElementById("newPassword")?.value || "";
-  try{
-    await requestJson("/auth/password", {method:"POST", body:JSON.stringify({current_password,new_password})});
-    closeAccountModal();
-    showToast("Passwort geändert");
-  }catch(error){ showToast(error.message); }
-}
-
-async function deleteAccount(){
-  if(!confirm("Konto wirklich löschen? Wochenplan, Favoriten, Bewertungen und Vorrat werden dauerhaft gelöscht.")) return;
-  try{
-    await requestJson("/auth/account", {method:"DELETE"});
-    currentUser = null;
-    updateAccountButton();
-    closeAccountModal();
-    showToast("Konto gelöscht");
-    showHome();
-  }catch(error){ showToast(error.message); }
-}
-
-    const ingredientAlternatives = {
-      "mehl": ["Dinkelmehl", "Hafermehl", "Mandelmehl", "Vollkornmehl"],
-      "milch": ["Mandelmilch", "Hafermilch", "Sojamilch", "laktosefreie Milch"],
-      "sahne": ["Cremefine", "Hafercuisine", "Kokosmilch"],
-      "butter": ["Margarine", "Olivenöl", "Kokosöl"],
-      "zucker": ["Erythrit", "Honig", "Ahornsirup", "Agavendicksaft"],
-      "ei": ["Apfelmus", "Leinsamen-Ei", "Banane"],
-      "eier": ["Apfelmus", "Leinsamen-Ei", "Banane"],
-      "quark": ["Skyr", "griechischer Joghurt", "pflanzlicher Quark"],
-      "skyr": ["Magerquark", "griechischer Joghurt", "pflanzlicher Skyr"],
-      "käse": ["Mozzarella light", "Reibekäse light", "veganer Käse"],
-      "nudeln": ["Vollkornnudeln", "Linsennudeln", "High-Protein Nudeln"],
-      "reis": ["Quinoa", "Bulgur", "Couscous"],
-      "hackfleisch": ["Hähnchenhack", "Rinderhack light", "Sojagranulat"],
-      "hähnchen": ["Putenbrust", "Tofu", "Kichererbsen"],
-      "kartoffeln": ["Süßkartoffeln", "Pastinaken", "Blumenkohl"],
-      "brokkoli": ["Blumenkohl", "Zucchini", "grüne Bohnen"]
-    };
-
-    function selectMealType(type, button){
-      selectedMealType = type;
-      document.querySelectorAll(".meal-circle").forEach(btn => btn.classList.remove("active"));
-      button.classList.add("active");
-      drawRouletteRecipe();
-    }
-
-    async function deleteRecipe(id){
-      if(!confirm("Dieses Rezept wirklich löschen?")) return;
-      const response = await fetch(`/rezepte/${Number(id)}`, {method:"DELETE"});
-      if(!response.ok) return showToast("Rezept konnte nicht gelöscht werden.");
-      allRecipes = [];
-      await ensureRecipesLoaded();
-      showToast("Rezept gelöscht!");
-      loadRecipes();
-    }
-
-    async function deleteImportedRecipes(){
-      if(!confirm("Alle importierten Rezepte wirklich löschen?")) return;
-      const response = await fetch("/rezepte/importierte", {method:"DELETE"});
-      if(!response.ok) return showToast("Importierte Rezepte konnten nicht gelöscht werden.");
-      allRecipes = [];
-      await ensureRecipesLoaded();
-      showToast("Importierte Rezepte gelöscht!");
-      loadRecipes();
-    }
-
-    function normalizeIngredientText(text){
-      return String(text || "").toLowerCase().replaceAll("ä","ae").replaceAll("ö","oe").replaceAll("ü","ue").replaceAll("ß","ss");
-    }
-
-    function getIngredientAlternatives(ingredient){
-      const text = normalizeIngredientText(ingredient);
-      for(const key in ingredientAlternatives){
-        if(text.includes(normalizeIngredientText(key))) return ingredientAlternatives[key];
-      }
-      return [];
-    }
-
-    function renderIngredientBlock(ingredient){
-      const alternatives = getIngredientAlternatives(ingredient);
-      const safeIngredient = escapeHtml(ingredient);
-      return `
-        <div class="ingredient ingredient-builder">
-          <div class="ingredient-main">✓ ${safeIngredient}</div>
-          ${alternatives.length ? `
-            <div class="ingredient-alt-box">
-              <span>Alternativen:</span>
-              ${alternatives.map(alt => {
-                const safeAlt = escapeHtml(alt);
-                return `<button class="alt-btn" type="button" data-ingredient="${safeIngredient}" data-alternative="${safeAlt}" onclick="showIngredientAlternative(this)">${safeAlt}</button>`;
-              }).join("")}
-            </div>` : ""}
-        </div>`;
-    }
-
-    function showIngredientAlternative(button){
-      const ingredient = button.dataset.ingredient || "";
-      const alternative = button.dataset.alternative || "";
-      showToast(`${ingredient} → ${alternative}`);
-    }
-
-    function cleanRecipeText(text){
-      let value = String(text || "").replace(/[\u{1F300}-\u{1FAFF}]/gu, "").replace(/\s+/g, " ").replace(/\s*-\s*/g, "-").trim();
-      const fixes = {
-        "Blaubeer-Protei N-Dessert":"Blaubeer-Protein-Dessert",
-        "Fluffige Erdbeer-Protei Ncrem E":"Fluffige Erdbeer-Proteincreme",
-        "Crem Ige Cham Pignon-Brokkoli-Pasta M It":"Cremige Champignon-Brokkoli-Pasta",
-        "Gefrorenes Skyr-Dessert M It Protein & Schokolade":"Gefrorenes Skyr-Dessert mit Protein & Schokolade",
-        "High-Protei N Krä Ute Rquark M I T":"High-Protein Kräuterquark",
-        "High Prot E I N Waf F E L N":"High-Protein Waffeln",
-        "High-Protein Corn Dogs M It Käse":"High-Protein Corn Dogs mit Käse",
-        "High-Protein Gnocchi In Crem Iger Tomaten-":"High-Protein Gnocchi in cremiger Tomatensoße",
-        "Kartoffel-Spinat-Auflauf M It Fischstäbchen":"Kartoffel-Spinat-Auflauf mit Fischstäbchen",
-        "Knoblauchbutter-Hähnchenbissen M It":"Knoblauchbutter-Hähnchenbissen",
-        "Him Beer-Chia-Quark":"Himbeer-Chia-Quark"
-      };
-      if(fixes[value]) return fixes[value];
-      return value.replace(/\bProtei\s*N\b/gi,"Protein").replace(/\bProt\s*E\s*I\s*N\b/gi,"Protein").replace(/\bWaf\s*F\s*E\s*L\s*N\b/gi,"Waffeln").replace(/\bM\s*It\b/gi,"mit").replace(/\bM\s*I\s*T\b/gi,"mit").replace(/\bCrem\s*Ige\b/gi,"Cremige").replace(/\bCrem\s*Iger\b/gi,"cremiger").replace(/\bCham\s*Pignon\b/gi,"Champignon").replace(/\bKrä\s*Ute\s*Rquark\b/gi,"Kräuterquark").replace(/\bNcrem\s*E\b/gi,"ncreme").replace(/\s+/g," ").trim();
-    }
-
-    function escapeHtml(value){
-      return String(value ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-    function imageUrl(recipe){
-      const raw = recipe.image || recipe.bild || recipe.image_url;
-      if(!raw) return "";
-      return raw.startsWith("http") ? raw : `/static/images/${raw}`;
-    }
-
-    function showToast(msg){
-      const t = document.getElementById("toast");
-      t.textContent = msg;
-      t.classList.add("show");
-      setTimeout(() => t.classList.remove("show"), 2200);
-    }
-
-    function setActiveNav(name){
-      document.querySelectorAll(".top-nav button").forEach(b => b.classList.remove("active"));
-      const active = document.querySelector(`[data-nav="${name}"]`);
-      if(active) active.classList.add("active");
-    }
-
-    function showSkeleton(target){
-      target.innerHTML = `<div class="skeleton-grid"><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div></div>`;
-    }
-
-    function showHome(){
-      setActiveNav("home");
-      document.getElementById("home").classList.remove("hidden");
-      renderHomeSections();
-      window.scrollTo({top:0,behavior:"smooth"});
-    }
-
-    function hideHome(){document.getElementById("home").classList.add("hidden")}
-
-    function loadRecipeImport(){
-      hideHome();
-      setActiveNav("import");
-      document.getElementById("content").innerHTML = `
-        <button class="secondary" onclick="showHome()">← Zurück</button>
-        <div class="panel" style="display:grid;gap:16px;margin-top:20px;">
-          <div>
-            <span class="hero-badge">🔗 Rezept aus Link</span>
-            <h1>Rezept importieren</h1>
-            <p class="muted">Füge einen Link von TikTok, YouTube oder Instagram ein. Die App legt daraus ein Rezept an.</p>
-          </div>
-          <input id="recipeImportUrl" placeholder="https://www.youtube.com/watch?v=...">
-          <button class="primary" onclick="saveRecipeFromLink()">Rezept aus Link erstellen</button>
-        </div>`;
-    }
-
-    async function saveRecipeFromLink(){
-      const url = document.getElementById("recipeImportUrl").value.trim();
-      if(!url) return showToast("Bitte Link einfügen.");
-      const response = await fetch("/rezept-aus-link", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})});
-      if(!response.ok) return showToast("Rezept konnte nicht importiert werden.");
-      const recipe = await response.json();
-      allRecipes = [];
-      await ensureRecipesLoaded();
-      showToast("Rezept wurde angelegt!");
-      showRecipe(recipe.id);
-    }
-
-    async function ensureRecipesLoaded(){
-      try{
-        if(!allRecipes.length){
-          const response = await fetch("/rezepte");
-          if(!response.ok) throw new Error("Serverfehler");
-          allRecipes = await response.json();
-        }
-          return allRecipes;
-      }catch(error){
-        document.getElementById("content").innerHTML = `<div class="error-box">❌ Rezepte konnten nicht geladen werden.<br><br>Bitte später erneut versuchen.</div>`;
-        throw error;
-      }
-    }
-
-    async function renderHomeSections(){
-    const c = document.getElementById("content");
-  try{
-    await ensureRecipesLoaded();
-
-    const todayKey = new Date().toISOString().slice(0, 10);
-    const savedKey = localStorage.getItem("recommendedDate");
-    let recommendedIds = JSON.parse(localStorage.getItem("recommendedIds") || "[]");
-
-    if(savedKey !== todayKey || !recommendedIds.length){
-      recommendedIds = [...allRecipes]
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 3)
-        .map(r => Number(r.id));
-
-      localStorage.setItem("recommendedDate", todayKey);
-      localStorage.setItem("recommendedIds", JSON.stringify(recommendedIds));
-    }
-
-    let recommended = recommendedIds
-      .map(id => allRecipes.find(r => Number(r.id) === Number(id)))
-      .filter(Boolean);
-
-    if(recommended.length < 3){
-      recommended = [...allRecipes]
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 3);
-    }
-
-    c.innerHTML = `
-      <div class="home-sections">
-        <section>
-          <div class="section-head">
-            <div><h2>⭐ Heute empfohlen</h2><p class="muted">Drei leckere Ideen für heute.</p></div>
-            <button class="secondary" onclick="loadRecipes()">Alle ansehen →</button>
-          </div>
-          ${recommended.length ? `<div class="clean-recipe-grid">${recommended.map(simpleRecipeCard).join("")}</div>` : `<div class="empty-state">Noch keine Rezepte geladen.</div>`}
-        </section>
-       <section style="margin-top:44px;">
-  <div class="section-head">
-    <div>
-      <h2>🔥 Schnell etwas finden</h2>
-      <p class="muted">Wonach ist dir gerade?</p>
+async function logoutUser(){try{await requestJson("/auth/logout",{method:"POST"})}catch(_){}state.user=null;reloadGuestState();updateAccountUI();closeAccountModal();showHome();showToast("Abgemeldet.")}
+async function logoutAll(){if(!confirm("Auf allen Geräten abmelden?"))return;try{await requestJson("/auth/logout-all",{method:"POST"});state.user=null;reloadGuestState();updateAccountUI();closeAccountModal();showHome();showToast("Alle Sitzungen beendet.")}catch(e){showToast(e.message)}}
+function reloadGuestState(){state.favorites=JSON.parse(localStorage.getItem("favorites")||"[]").map(Number);state.ratings=JSON.parse(localStorage.getItem("ratings")||"{}");state.pantry=JSON.parse(localStorage.getItem("pantry")||"[]");state.atHome=JSON.parse(localStorage.getItem("atHomeIngredients")||"[]")}
+function showProfileEdit(){
+  const c=document.getElementById("accountModalContent"),u=state.user;
+  c.innerHTML=`
+  <div class="modal-head"><h2>Profil bearbeiten</h2><button class="icon-btn" onclick="openAccountModal()">←</button></div>
+  <div class="avatar-editor">
+    ${avatarMarkup(u,"avatar-large")}
+    <div style="flex:1"><label class="field"><span>Profilbild (JPG, PNG oder WebP, max. 5 MB)</span><input id="avatarFile" type="file" accept="image/png,image/jpeg,image/webp"></label>
+      <div class="button-row" style="margin-top:8px"><button class="secondary-btn" onclick="uploadAvatar()">Bild speichern</button><button class="ghost-btn" onclick="deleteAvatar()">Entfernen</button></div>
     </div>
   </div>
-
-  <div class="meal-filter-wrap">
-
-    <button class="meal-circle" onclick="openRecipeCategory('Frühstück')">
-      <div class="meal-icon">🌅</div>
-      <span>Frühstück</span>
-    </button>
-
-    <button class="meal-circle" onclick="openRecipeCategory('Nudeln')">
-      <div class="meal-icon">🍝</div>
-      <span>Nudeln</span>
-    </button>
-
-    <button class="meal-circle" onclick="openRecipeCategory('Vegetarisch')">
-      <div class="meal-icon">🥦</div>
-      <span>Veggie</span>
-    </button>
-
-    <button class="meal-circle" onclick="openRecipeCategory('Auflauf')">
-      <div class="meal-icon">🥘</div>
-      <span>Auflauf</span>
-    </button>
-
-    <button class="meal-circle" onclick="openRecipeCategory('Suppe')">
-      <div class="meal-icon">🍲</div>
-      <span>Suppe</span>
-    </button>
-
-    <button class="meal-circle" onclick="openRecipeCategory('Dessert')">
-      <div class="meal-icon">🍰</div>
-      <span>Dessert</span>
-    </button>
-
-  </div>
-</section>
-      </div>`;
-  }catch(error){
-    c.innerHTML = "";
-  }
+  <form class="form-stack" style="margin-top:14px" onsubmit="saveProfile(event)">
+    <label class="field"><span>Benutzername</span><input id="profileUsername" required value="${escapeHtml(u.username)}"></label>
+    <label class="field"><span>Anzeigename</span><input id="profileDisplayName" value="${escapeHtml(u.display_name||"")}"></label>
+    <label class="field"><span>Profilbeschreibung</span><textarea id="profileBio" maxlength="280" placeholder="Erzähl kurz etwas über dich ...">${escapeHtml(u.bio||"")}</textarea></label>
+    <button class="primary-btn" type="submit">Profil speichern</button>
+  </form>`;
 }
+async function saveProfile(event){event.preventDefault();try{state.user=await requestJson("/auth/profile",{method:"PATCH",body:JSON.stringify({username:profileUsername.value.trim(),display_name:profileDisplayName.value.trim(),bio:profileBio.value.trim()})});updateAccountUI();openAccountModal();showToast("Profil gespeichert.")}catch(e){showToast(e.message)}}
+async function uploadAvatar(){const f=document.getElementById("avatarFile")?.files?.[0];if(!f)return showToast("Bitte ein Bild auswählen.");const fd=new FormData();fd.append("file",f);try{const r=await fetch("/auth/avatar",{method:"POST",body:fd});const d=await r.json();if(!r.ok)throw new Error(d?.detail||"Upload fehlgeschlagen");state.user.avatar_url=d.avatar_url;updateAccountUI();showProfileEdit();showToast("Profilbild gespeichert.")}catch(e){showToast(e.message)}}
+async function deleteAvatar(){try{await requestJson("/auth/avatar",{method:"DELETE"});state.user.avatar_url="";updateAccountUI();showProfileEdit();showToast("Profilbild entfernt.")}catch(e){showToast(e.message)}}
+function showPasswordChange(){const c=document.getElementById("accountModalContent");c.innerHTML=`<div class="modal-head"><h2>Passwort ändern</h2><button class="icon-btn" onclick="openAccountModal()">←</button></div><form class="form-stack" onsubmit="changePassword(event)"><label class="field"><span>Aktuelles Passwort</span><input id="currentPassword" type="password" required autocomplete="current-password"></label><label class="field"><span>Neues Passwort</span><input id="newPassword" type="password" required minlength="8" autocomplete="new-password"></label><button class="primary-btn" type="submit">Passwort speichern</button></form>`}
+async function changePassword(e){e.preventDefault();try{await requestJson("/auth/password",{method:"POST",body:JSON.stringify({current_password:currentPassword.value,new_password:newPassword.value})});openAccountModal();showToast("Passwort geändert.")}catch(err){showToast(err.message)}}
+async function deleteAccount(){if(!confirm("Konto und alle persönlichen Daten wirklich dauerhaft löschen?"))return;try{await requestJson("/auth/account",{method:"DELETE"});state.user=null;reloadGuestState();updateAccountUI();closeAccountModal();showHome();showToast("Konto gelöscht.")}catch(e){showToast(e.message)}}
 
-    function simpleRecipeCard(recipe){
-      const img = imageUrl(recipe);
-      const safeName = escapeHtml(cleanRecipeText(recipe.name));
-      const safeDifficulty = escapeHtml(recipe.schwierigkeit || "Einfach");
-      const safeTime = escapeHtml(recipe.kochzeit || "?");
-      const safeImg = escapeHtml(img);
-      const id = Number(recipe.id);
-
-      return `
-        <div class="card" onclick="showRecipe(${id})">
-          ${img ? `<img src="${safeImg}" alt="${safeName}">` : `<div class="placeholder">Kein Bild</div>`}
-          <div class="card-body">
-            <h3>${safeName}</h3>
-            <div class="meta">⏱️ ${safeTime} Min · 🔥 ${safeDifficulty}</div>
-            <button class="primary full-btn" onclick="event.stopPropagation(); showRecipe(${id})">Öffnen</button>
-          </div>
-        </div>`;
-    }
-
-    function recipeCard(recipe){
-      const img = imageUrl(recipe);
-      const id = Number(recipe.id);
-      const safeName = escapeHtml(cleanRecipeText(recipe.name));
-      const safeKitchen = escapeHtml(recipe.kueche || "");
-      const safeDifficulty = escapeHtml(recipe.schwierigkeit || "Einfach");
-      const safeTime = escapeHtml(recipe.kochzeit || "?");
-      const safeImg = escapeHtml(img);
-      const showKitchen = recipe.kueche && recipe.kueche !== "PDF Import" && recipe.kueche !== "Link Import";
-
-      return `
-        <div class="card" onclick="showRecipe(${id})">
-          ${img ? `<img src="${safeImg}" alt="${safeName}">` : `<div class="placeholder">Kein Bild</div>`}
-          <div class="favorite-row">
-            <button class="favorite-btn" onclick="event.stopPropagation(); toggleFavorite(${id})">${isFavorite(id) ? "❤️" : "🤍"}</button>
-          </div>
-          <div class="card-body">
-            <h3>${safeName}</h3>
-            <div class="meta">${showKitchen ? `${safeKitchen} · ` : ""}${safeTime} Min · ${safeDifficulty}</div>
-            <div class="card-actions clean-actions">
-              <button class="primary" onclick="event.stopPropagation(); showRecipe(${id})">Rezept öffnen</button>
-              <button class="secondary" onclick="event.stopPropagation(); quickAddToPlan(${id})">📅 Planen</button>
-              ${recipe.kueche === "Link Import" ? `<button class="secondary" onclick="event.stopPropagation(); deleteRecipe(${id})">🗑️ Löschen</button>` : ""}
-            </div>
-          </div>
-        </div>`;
-    }
-
-    let selectedRecipeFilter = "Alle";
-async function openRecipeCategory(category){
-  await loadRecipes();
-
-  selectedRecipeFilter = category;
-  renderRecipes();
-
-  document.querySelectorAll(".meal-filter-panel .meal-circle").forEach(btn => {
-    btn.classList.remove("active");
-  });
-
-  const buttons = [...document.querySelectorAll(".meal-filter-panel .meal-circle")];
-
-  const matchingButton = buttons.find(btn => {
-    const text = btn.textContent.trim().toLowerCase();
-
-    if(category === "Vegetarisch") return text.includes("veggie");
-
-    return text.includes(category.toLowerCase());
-  });
-
-  if(matchingButton){
-    matchingButton.classList.add("active");
-  }
+function showHome(){setView("home");renderHome()}
+async function renderHome(){
+  const c=document.getElementById("homeContent");c.innerHTML=skeleton();
+  try{await ensureRecipes();const recs=dailyRecommendations();c.innerHTML=`
+    <section class="section"><div class="section-head"><div><h2>Heute empfohlen</h2><p>Drei Ideen, die heute gut passen könnten.</p></div><button class="secondary-btn" onclick="loadRecipes()">Alle Rezepte →</button></div>
+    <div class="recipe-grid">${recs.map(recipeCard).join("")}</div></section>
+    <section class="section"><div class="section-head"><div><h2>Schnell finden</h2><p>Starte direkt mit einer Kategorie.</p></div></div>
+    <div class="chips">${["Frühstück","Nudeln","Reis","Vegetarisch","Auflauf","Suppe","Dessert"].map(x=>`<button class="chip-btn" onclick="loadRecipes('${x}')">${categoryIcon(x)} ${x}</button>`).join("")}</div></section>`;
+  }catch(e){c.innerHTML=`<div class="empty">Rezepte konnten nicht geladen werden.</div>`}
 }
+function dailyRecommendations(){const key=new Date().toISOString().slice(0,10),saved=JSON.parse(localStorage.getItem("dailyRecommendations")||"{}");if(saved.key===key){const rows=saved.ids.map(id=>state.recipes.find(r=>+r.id===+id)).filter(Boolean);if(rows.length===3)return rows}const rows=[...state.recipes].sort(()=>Math.random()-.5).slice(0,3);localStorage.setItem("dailyRecommendations",JSON.stringify({key,ids:rows.map(r=>+r.id)}));return rows}
 
-async function loadRecipes(){
-  selectedRecipeFilter = "Alle";
-  setActiveNav("recipes");
-  hideHome();
+function categoryIcon(x){return({"Frühstück":"🌅","Mittagessen":"☀️","Abendbrot":"🌙","Nudeln":"🍝","Reis":"🍚","Auflauf":"🥘","Suppe":"🍲","Vegetarisch":"🥦","Snack":"🥪","Dessert":"🍰","Alle":"🍽️"})[x]||"🍽️"}
+function recipeText(r){return [r.name,r.kueche,r.description,r.anleitung,...(r.tags||[]),...(r.zutaten||[])].join(" ").toLowerCase()}
+function matchesCategory(r,cat){if(cat==="Alle")return true;const t=recipeText(r),breakfast=/frühstück|pancake|waffel|oats|bowl|bagel|brötchen/.test(t),dessert=/dessert|kuchen|süß|pudding|churro/.test(t);if(cat==="Frühstück")return breakfast;if(cat==="Mittagessen")return !breakfast&&!dessert;if(cat==="Abendbrot")return !breakfast&&!dessert&&/abend|brot|wrap|toast|burger|snack/.test(t);if(cat==="Nudeln")return /nudel|pasta|spaghetti|makkaroni|tortellini/.test(t);if(cat==="Reis")return /\breis\b|milchreis/.test(t);if(cat==="Auflauf")return /auflauf|gratin|überback/.test(t);if(cat==="Suppe")return /suppe|eintopf/.test(t);if(cat==="Vegetarisch")return /vegetarisch|veggie|gemüse/.test(t);if(cat==="Snack")return /snack|wrap|toast|burger|bagel/.test(t);if(cat==="Dessert")return dessert;return true}
+function isFavorite(id){return state.favorites.includes(+id)}
+function recipeCard(r){const img=imageUrl(r),own=r.owner_user_id!=null;return `<article class="card">
+  <button class="favorite-float" aria-label="Favorit" onclick="toggleFavorite(${+r.id})">${isFavorite(r.id)?"❤️":"🤍"}</button>
+  <div class="card-media" onclick="showRecipe(${+r.id})">${img?`<img loading="lazy" src="${escapeHtml(img)}" alt="${escapeHtml(r.name)}">`:`<div class="empty" style="height:100%;display:grid;place-items:center">🍽️</div>`}</div>
+  <div class="card-body"><div class="card-title" onclick="showRecipe(${+r.id})">${escapeHtml(cleanText(r.name))}</div>
+  <div class="card-desc">${escapeHtml(r.description||"")}</div>
+  <div class="meta"><span class="pill">⏱ ${+r.kochzeit||"?"} Min</span><span class="pill">🔥 ${escapeHtml(r.schwierigkeit||"Einfach")}</span>${own?`<span class="pill">👤 Eigenes</span>`:""}</div>
+  <div class="card-actions"><button class="primary-btn" onclick="showRecipe(${+r.id})">Öffnen</button><button class="secondary-btn" onclick="quickAddToPlan(${+r.id})">Planen</button></div>
+  </div></article>`}
 
-  const c = document.getElementById("content");
-  showSkeleton(c);
-  await ensureRecipesLoaded();
-
-  c.innerHTML = `
-    <button class="secondary" onclick="showHome()">← Zurück</button>
-    <h2>🍲 Alle Rezepte</h2>
-
-    <div class="meal-filter-panel" style="margin:18px 0 26px;">
-      <div class="meal-filter-title">
-        <span>Filter wählen</span>
-        <span>Rezepte</span>
-      </div>
-
-      <input
-        id="searchInput"
-        placeholder="Wonach hast du Hunger?"
-        oninput="renderRecipes()"
-        style="width:100%; margin-bottom:20px;"
-      >
-
-      <div class="meal-filter-wrap">
-        <button class="meal-circle active" onclick="filterRecipesByType('Alle', this)">
-          <div class="meal-icon">🍽️</div>
-          <span>Alle</span>
-        </button>
-
-        <button class="meal-circle" onclick="filterRecipesByType('Frühstück', this)">
-          <div class="meal-icon">🌅</div>
-          <span>Frühstück</span>
-        </button>
-
-        <button class="meal-circle" onclick="filterRecipesByType('Mittagessen', this)">
-          <div class="meal-icon">☀️</div>
-          <span>Mittag</span>
-        </button>
-
-        <button class="meal-circle" onclick="filterRecipesByType('Abendbrot', this)">
-          <div class="meal-icon">🌙</div>
-          <span>Abend</span>
-        </button>
-
-        <button class="meal-circle" onclick="filterRecipesByType('Nudeln', this)">
-          <div class="meal-icon">🍝</div>
-          <span>Nudeln</span>
-        </button>
-
-        <button class="meal-circle" onclick="filterRecipesByType('Auflauf', this)">
-          <div class="meal-icon">🥘</div>
-          <span>Auflauf</span>
-        </button>
-
-        <button class="meal-circle" onclick="filterRecipesByType('Suppe', this)">
-          <div class="meal-icon">🍲</div>
-          <span>Suppe</span>
-        </button>
-
-        <button class="meal-circle" onclick="filterRecipesByType('Vegetarisch', this)">
-          <div class="meal-icon">🥦</div>
-          <span>Veggie</span>
-        </button>
-
-        <button class="meal-circle" onclick="filterRecipesByType('Snack', this)">
-          <div class="meal-icon">🥪</div>
-          <span>Snack</span>
-        </button>
-
-        <button class="meal-circle" onclick="filterRecipesByType('Dessert', this)">
-          <div class="meal-icon">🍰</div>
-          <span>Dessert</span>
-        </button>
-      </div>
+async function loadRecipes(category="Alle"){
+  setView("recipes");state.recipeFilter=category;const c=document.getElementById("content");c.innerHTML=skeleton();await ensureRecipes();
+  c.innerHTML=`<div class="section-head"><div><span class="eyebrow">Rezeptbibliothek</span><h2 style="margin-top:8px">Rezepte entdecken</h2><p>Suche nach Namen, Zutaten, Küche oder Tags und kombiniere mehrere Filter.</p></div>${state.user?`<button class="secondary-btn" onclick="showCreateRecipe()">＋ Eigenes Rezept</button>`:""}</div>
+  <div class="filter-panel">
+    <div class="search-row">
+      <input id="recipeSearch" placeholder="Rezept oder Zutat suchen ..." oninput="renderRecipeGrid()">
+      <select id="timeFilter" onchange="renderRecipeGrid()"><option value="0">Beliebige Zeit</option><option value="15">≤ 15 Min</option><option value="30">≤ 30 Min</option><option value="45">≤ 45 Min</option><option value="60">≤ 60 Min</option></select>
+      <select id="difficultyFilter" onchange="renderRecipeGrid()"><option value="">Alle Level</option><option>Einfach</option><option>Mittel</option><option>Schwer</option></select>
+      <select id="sortFilter" onchange="renderRecipeGrid()"><option value="name">A–Z</option><option value="time">Kochzeit</option><option value="rating">Meine Bewertung</option></select>
     </div>
-
-    <div class="grid" id="recipeGrid"></div>
-  `;
-
-  renderRecipes();
+    <div class="chips" id="categoryChips">${CATEGORIES.map(x=>`<button class="chip-btn ${x===category?"active":""}" onclick="setRecipeCategory('${x}',this)">${categoryIcon(x)} ${x==="Mittagessen"?"Mittag":x==="Abendbrot"?"Abend":x}</button>`).join("")}
+      <button class="chip-btn" id="favoriteOnlyBtn" onclick="toggleFavoriteFilter(this)">❤️ Nur Favoriten</button>
+    </div>
+  </div>
+  <div id="recipeResultMeta" class="hint"></div><div class="recipe-grid" id="recipeGrid" style="margin-top:12px"></div>`;
+  renderRecipeGrid();
+}
+let favoriteOnly=false;
+function setRecipeCategory(cat,btn){state.recipeFilter=cat;document.querySelectorAll("#categoryChips .chip-btn").forEach(x=>{if(x.id!=="favoriteOnlyBtn")x.classList.remove("active")});btn.classList.add("active");renderRecipeGrid()}
+function toggleFavoriteFilter(btn){favoriteOnly=!favoriteOnly;btn.classList.toggle("active",favoriteOnly);renderRecipeGrid()}
+function renderRecipeGrid(){
+  const q=(document.getElementById("recipeSearch")?.value||"").trim().toLowerCase(),max=+(document.getElementById("timeFilter")?.value||0),diff=document.getElementById("difficultyFilter")?.value||"",sort=document.getElementById("sortFilter")?.value||"name";
+  let rows=state.recipes.filter(r=>(!q||recipeText(r).includes(q))&&matchesCategory(r,state.recipeFilter)&&(!max||+r.kochzeit<=max)&&(!diff||r.schwierigkeit===diff)&&(!favoriteOnly||isFavorite(r.id)));
+  rows.sort((a,b)=>sort==="time"?+a.kochzeit-+b.kochzeit:sort==="rating"?+(state.ratings[b.id]||0)-+(state.ratings[a.id]||0):a.name.localeCompare(b.name,"de"));
+  document.getElementById("recipeResultMeta").textContent=`${rows.length} Rezept${rows.length===1?"":"e"} gefunden`;
+  document.getElementById("recipeGrid").innerHTML=rows.length?rows.map(recipeCard).join(""):`<div class="empty" style="grid-column:1/-1"><h3>Keine Rezepte gefunden</h3><p>Ändere Suchbegriff oder Filter.</p></div>`;
 }
 
-function filterRecipesByType(type, button){
-  selectedRecipeFilter = type;
-
-  document.querySelectorAll(".meal-filter-panel .meal-circle").forEach(btn => {
-    btn.classList.remove("active");
-  });
-
-  button.classList.add("active");
-  renderRecipes();
+async function showRecipe(id){
+  await ensureRecipes();const r=state.recipes.find(x=>+x.id===+id);if(!r)return showToast("Rezept nicht gefunden.");
+  saveRecent(r);setView("recipes");const img=imageUrl(r),steps=parseSteps(r.anleitung);
+  document.getElementById("content").innerHTML=`
+  <div class="button-row" style="margin-bottom:14px"><button class="secondary-btn" onclick="loadRecipes()">← Zurück</button>${r.owner_user_id?`<button class="danger-btn" onclick="deleteOwnRecipe(${+r.id})">Eigenes Rezept löschen</button>`:""}</div>
+  <div class="detail-shell">
+    <div class="detail-media">${img?`<img src="${escapeHtml(img)}" alt="${escapeHtml(r.name)}">`:`<div class="empty" style="height:100%;display:grid;place-items:center">🍽️ Kein Bild</div>`}</div>
+    <aside class="detail-summary">
+      <span class="eyebrow">${escapeHtml(r.kueche||"Rezept")}</span><h1>${escapeHtml(r.name)}</h1><p class="detail-desc">${escapeHtml(r.description||"")}</p>
+      <div class="meta"><span class="pill">⏱ ${+r.kochzeit||"?"} Min</span><span class="pill">🍽 ${+r.portionen||2} Portionen</span><span class="pill">🔥 ${escapeHtml(r.schwierigkeit||"Einfach")}</span></div>
+      <div class="chips" style="margin-top:12px">${(r.tags||[]).map(t=>`<span class="pill">${escapeHtml(t)}</span>`).join("")}</div>
+      <div style="margin-top:16px">${ratingStars(r.id)}</div>
+      <div class="button-row" style="margin-top:18px">
+        <button class="primary-btn" onclick="startCookMode(${+r.id})">👨‍🍳 Kochmodus</button>
+        <button class="secondary-btn" onclick="toggleFavorite(${+r.id});showRecipe(${+r.id})">${isFavorite(r.id)?"❤️ Favorit":"🤍 Favorit"}</button>
+        <button class="secondary-btn" onclick="quickAddToPlan(${+r.id})">📅 Einplanen</button>
+        <button class="secondary-btn" onclick="markAsEaten(${+r.id})">✓ Gegessen</button>
+        <button class="secondary-btn" onclick="shareRecipe(${+r.id})">↗ Teilen</button>
+      </div>
+      ${r.source_url?`<p class="hint" style="margin-top:14px">Quelle: <a class="source-link" href="${escapeHtml(r.source_url)}" target="_blank" rel="noopener">${escapeHtml(r.source_url)}</a></p>`:""}
+    </aside>
+  </div>
+  <div class="detail-columns">
+    <section class="panel"><h2>Zutaten</h2><div class="ingredient-list">${(r.zutaten||[]).map(z=>`<div class="ingredient">✓ ${escapeHtml(z)}</div>`).join("")}</div></section>
+    <section class="panel"><h2>Zubereitung</h2><div class="step-list">${steps.map((s,i)=>`<div class="step"><span class="step-number">${i+1}</span><span>${escapeHtml(s)}</span></div>`).join("")}</div></section>
+  </div>`;
 }
+function parseSteps(v){return String(v||"Keine Anleitung vorhanden.").replaceAll("\\n","\n").split(/\n|(?=\d+\.\s)/).map(x=>x.replace(/^\d+\.\s*/,"").trim()).filter(Boolean)}
+function ratingStars(id){const current=+(state.ratings[id]||0);return `<div><div class="hint">Deine Bewertung</div><div class="rating">${[1,2,3,4,5].map(n=>`<button class="star" onclick="setRating(${+id},${n})" aria-label="${n} Sterne">${n<=current?"★":"☆"}</button>`).join("")}</div></div>`}
+async function setRating(id,n){state.ratings[id]=n;if(state.user){try{await requestJson(`/ratings/${id}`,{method:"PUT",body:JSON.stringify({rating:n})})}catch(e){return showToast(e.message)}}else localStorage.setItem("ratings",JSON.stringify(state.ratings));showToast("Bewertung gespeichert.");showRecipe(id)}
+async function toggleFavorite(id){if(state.user){try{const d=await requestJson(`/favorites/${id}/toggle`,{method:"POST"});state.favorites=(d.ids||[]).map(Number)}catch(e){return showToast(e.message)}}else{state.favorites=isFavorite(id)?state.favorites.filter(x=>x!==+id):[...state.favorites,+id];localStorage.setItem("favorites",JSON.stringify(state.favorites))}showToast(isFavorite(id)?"Als Favorit gespeichert.":"Favorit entfernt.")}
+async function loadFavorites(){await ensureRecipes();setView("recipes");const rows=state.recipes.filter(r=>isFavorite(r.id));document.getElementById("content").innerHTML=`<div class="section-head"><div><span class="eyebrow">Deine Sammlung</span><h2 style="margin-top:8px">Favoriten</h2><p>Rezepte, die du dir gemerkt hast.</p></div></div>${rows.length?`<div class="recipe-grid">${rows.map(recipeCard).join("")}</div>`:`<div class="empty">Noch keine Favoriten gespeichert.</div>`}`}
 
-function renderRecipes(){
-  const search = document.getElementById("searchInput")?.value.toLowerCase() || "";
-  const grid = document.getElementById("recipeGrid");
-  if(!grid) return;
-
-  const selected = selectedRecipeFilter;
-
-  const filtered = allRecipes.filter(r => {
-    const ingredientText = (r.zutaten || []).join(" ").toLowerCase();
-    const tagText = (r.tags || []).join(" ").toLowerCase();
-
-    const text = [
-  r.name || "",
-  r.kueche || "",
-  r.kategorie || "",
-  r.anleitung || "",
-  ...(r.tags || []),
-  ...(r.zutaten || [])
-].join(" ").toLowerCase();
-
-    let matchesCategory = true;
-
-  if(selected !== "Alle"){
-    matchesCategory = recipeMatchesRouletteFilter(r, selected);
-}
-
-
-    return (
-      (!search ||
-        String(r.name || "").toLowerCase().includes(search) ||
-        ingredientText.includes(search) ||
-        tagText.includes(search))
-      && matchesCategory
-    );
-  });
-
-  grid.innerHTML = filtered.length
-    ? filtered.map(recipeCard).join("")
-    : `<div class="empty-state"><h2>Keine Rezepte gefunden</h2><p>Versuche einen anderen Filter oder Suchbegriff.</p></div>`;
-}
-
-function formatSteps(anleitung){
-  return String(anleitung || "Keine Anleitung vorhanden.")
-    .replaceAll("\\n", "\n")
-    .split(/\n|(?=\d+\.\s)/)
-    .map(s => s.trim())
-    .filter(Boolean)
-    .map(s => `<div class="step">${escapeHtml(s)}</div>`)
-    .join("");
-}
-
-
-    async function showRecipe(id){
-      const activeNav = document.querySelector(".top-nav button.active")?.dataset.nav;
-      if(activeNav && activeNav !== "home") previousView = activeNav;
-
-      recipeScrollPosition = window.scrollY;
-      hideHome();
-      await ensureRecipesLoaded();
-
-      const recipe = allRecipes.find(r => Number(r.id) === Number(id));
-      if(!recipe){
-        showToast("Rezept nicht gefunden.");
-        return;
-      }
-
-      saveRecentRecipe(recipe);
-      const img = imageUrl(recipe);
-      const safeImg = escapeHtml(img);
-      const safeName = escapeHtml(cleanRecipeText(recipe.name));
-      const safeKitchen = escapeHtml(recipe.kueche || "Unbekannt");
-      const safePortions = escapeHtml(recipe.portionen || "?");
-      const safeTime = escapeHtml(recipe.kochzeit || "?");
-      const safeDifficulty = escapeHtml(recipe.schwierigkeit || "Einfach");
-      const safeTags = (recipe.tags || []).map(tag => `<div class="chip">${escapeHtml(tag)}</div>`).join("");
-
-      document.getElementById("content").innerHTML = `
-        <button class="secondary" onclick="goBackFromRecipe()">← Zurück</button>
-        <div class="detail">
-          ${img ? `<img src="${safeImg}" alt="${safeName}">` : `<div class="placeholder">Kein Bild</div>`}
-          <div class="detail-body">
-            <h1>${safeName}</h1>
-            ${safeTags ? `<div class="chips">${safeTags}</div>` : ""}
-            ${ratingStars(recipe.id)}
-            <div class="meta">
-              <span>🌍 ${safeKitchen}</span>
-              <span>🍽️ ${safePortions} Portionen</span>
-              <span>⏱️ ${safeTime} Min</span>
-              <span>🔥 ${safeDifficulty}</span>
-            </div>
-            <div class="buttons">
-              <button class="primary" onclick="startCookMode(${Number(recipe.id)})">👨‍🍳 Kochmodus</button>
-              <button class="secondary" onclick="quickAddToPlan(${Number(recipe.id)})">📅 Einplanen</button>
-              <button class="secondary" onclick="shareRecipe(${Number(recipe.id)})">📤 Teilen</button>
-            </div>
-            <div class="columns">
-              <div>
-                <h2>Zutaten</h2>
-                <div class="ingredients">${(recipe.zutaten || []).map(renderIngredientBlock).join("")}</div>
-              </div>
-              <div>
-                <h2>Anleitung</h2>
-                <div class="steps">${formatSteps(recipe.anleitung || "Keine Anleitung vorhanden.")}</div>
-              </div>
-            </div>
-          </div>
-        </div>`;
-
-      window.scrollTo({top:0, behavior:"smooth"});
-    }
-
-  function toggleRouletteFilters(){
-  const box = document.getElementById("rouletteFilters");
-  if(box) box.classList.toggle("hidden");
-}
+function saveRecent(r){state.recent=[+r.id,...state.recent.filter(x=>+x!==+r.id)].slice(0,20);localStorage.setItem("recentRecipes",JSON.stringify(state.recent))}
+async function markAsEaten(id){const entry={recipe_id:+id,eaten_at:new Date().toISOString()};if(state.user){try{await requestJson(`/eaten/${id}`,{method:"POST"});state.eaten=[entry,...state.eaten]}catch(e){return showToast(e.message)}}else{state.eaten=[entry,...state.eaten].slice(0,30);localStorage.setItem("eatenHistory",JSON.stringify(state.eaten))}showToast("Als gegessen markiert.")}
+function recentEatenIds(days=3){const min=Date.now()-days*86400000;return new Set(state.eaten.filter(x=>new Date(x.eaten_at).getTime()>=min).map(x=>+x.recipe_id))}
 
 async function loadRoulette(){
-  setActiveNav("home");
-  hideHome();
-
-  const content = document.getElementById("content");
-
-  await ensureRecipesLoaded();
-
-  if(!allRecipes.length){
-    content.innerHTML = `<div class="empty-state">Keine Rezepte vorhanden.</div>`;
-    return;
-  }
-
-  selectedMealType = "Alle";
-
-  content.innerHTML = `
-    <section class="roulette-page">
-      <button class="secondary back-btn" onclick="showHome()">← Zurück</button>
-
-      <div class="roulette-header">
-        <span class="hero-badge">🎲 Rezept-Roulette</span>
-        <h1>Was darf es sein?</h1>
-        <p class="muted">Ziehe ein Rezept oder filtere vorher nach Kategorie.</p>
-      </div>
-
-      <div class="roulette-shell">
-        <div class="meal-filter-panel">
-          <div class="meal-filter-title">
-            <span>Filter</span>
-            <button class="secondary" onclick="toggleRouletteFilters()">Ein-/ausklappen</button>
-          </div>
-
-          <div id="rouletteFilters" class="meal-filter-wrap hidden">
-            <button class="meal-circle active" onclick="selectMealType('Alle', this)"><div class="meal-icon">🍽️</div><span>Alle</span></button>
-            <button class="meal-circle" onclick="selectMealType('Frühstück', this)"><div class="meal-icon">🌅</div><span>Frühstück</span></button>
-            <button class="meal-circle" onclick="selectMealType('Mittagessen', this)"><div class="meal-icon">☀️</div><span>Mittag</span></button>
-            <button class="meal-circle" onclick="selectMealType('Abendbrot', this)"><div class="meal-icon">🌙</div><span>Abend</span></button>
-            <button class="meal-circle" onclick="selectMealType('Nudeln', this)"><div class="meal-icon">🍝</div><span>Nudeln</span></button>
-            <button class="meal-circle" onclick="selectMealType('Auflauf', this)"><div class="meal-icon">🥘</div><span>Auflauf</span></button>
-            <button class="meal-circle" onclick="selectMealType('Suppe', this)"><div class="meal-icon">🍲</div><span>Suppe</span></button>
-            <button class="meal-circle" onclick="selectMealType('Vegetarisch', this)"><div class="meal-icon">🥦</div><span>Veggie</span></button>
-            <button class="meal-circle" onclick="selectMealType('Snack', this)"><div class="meal-icon">🥪</div><span>Snack</span></button>
-            <button class="meal-circle" onclick="selectMealType('Dessert', this)"><div class="meal-icon">🍰</div><span>Dessert</span></button>
-          </div>
-        </div>
-
-        <button class="roulette-draw-btn" onclick="drawRouletteRecipe()">
-          <div class="dice">🎲</div>
-          <span>Rezept<br>ziehen</span>
-        </button>
-      </div>
-
-      <div id="rouletteResult"></div>
-    </section>
-  `;
-
-  drawRouletteRecipe();
+  await ensureRecipes();setView("roulette");
+  document.getElementById("content").innerHTML=`<div class="section-head"><div><span class="eyebrow">Rezept-Roulette</span><h2 style="margin-top:8px">Lass dich überraschen</h2><p>Filtere grob – den Rest übernimmt der Zufall.</p></div></div>
+  <div class="roulette-layout"><aside class="panel"><label class="field"><span>Kategorie</span><select id="rouletteCategory" onchange="state.rouletteFilter=this.value">${CATEGORIES.map(x=>`<option>${x}</option>`).join("")}</select></label>
+  <label class="field" style="margin-top:12px"><span>Maximale Kochzeit</span><select id="rouletteTime"><option value="0">Egal</option><option value="20">20 Min</option><option value="30">30 Min</option><option value="45">45 Min</option><option value="60">60 Min</option></select></label>
+  <label class="shopping-item" style="margin-top:12px"><input id="avoidRecent" type="checkbox" checked> <span>In den letzten 3 Tagen gegessene Rezepte vermeiden</span></label>
+  <button class="primary-btn big-draw" style="margin-top:16px" onclick="drawRoulette()">🎲 Rezept ziehen</button></aside><div id="rouletteResult"><div class="empty" style="min-height:460px;display:grid;place-items:center">Bereit für eine Idee?</div></div></div>`;
+}
+function drawRoulette(){
+  const cat=document.getElementById("rouletteCategory")?.value||"Alle",max=+(document.getElementById("rouletteTime")?.value||0),avoid=document.getElementById("avoidRecent")?.checked;
+  let pool=state.recipes.filter(r=>matchesCategory(r,cat)&&(!max||+r.kochzeit<=max));if(avoid){const recent=recentEatenIds(3),filtered=pool.filter(r=>!recent.has(+r.id));if(filtered.length>=3)pool=filtered}
+  const history=new Set(state.rouletteHistory),fresh=pool.filter(r=>!history.has(+r.id));if(fresh.length)pool=fresh;if(!pool.length)return document.getElementById("rouletteResult").innerHTML=`<div class="empty">Keine passenden Rezepte gefunden.</div>`;
+  const winner=pool[Math.floor(Math.random()*pool.length)];state.rouletteHistory=[+winner.id,...state.rouletteHistory.filter(x=>x!==+winner.id)].slice(0,12);localStorage.setItem("rouletteHistory",JSON.stringify(state.rouletteHistory));
+  const img=imageUrl(winner);document.getElementById("rouletteResult").innerHTML=`<div class="roulette-result"><div class="image">${img?`<img src="${escapeHtml(img)}" alt="${escapeHtml(winner.name)}">`:`<div class="empty" style="height:100%;display:grid;place-items:center">🍽️</div>`}</div><div class="roulette-copy"><span class="eyebrow">🎉 Dein Treffer</span><h2>${escapeHtml(winner.name)}</h2><p class="detail-desc">${escapeHtml(winner.description||"")}</p><div class="meta"><span class="pill">⏱ ${winner.kochzeit} Min</span><span class="pill">${escapeHtml(winner.schwierigkeit)}</span></div><div class="button-row" style="margin-top:18px"><button class="primary-btn" onclick="showRecipe(${+winner.id})">Rezept öffnen</button><button class="secondary-btn" onclick="drawRoulette()">Nochmal</button></div></div></div>`;
 }
 
-function recipeMatchesRouletteFilter(recipe, selected){
-  const text = [
-    recipe.name || "",
-    recipe.kueche || "",
-    recipe.kategorie || "",
-    recipe.anleitung || "",
-    ...(recipe.tags || []),
-    ...(recipe.zutaten || [])
-  ].join(" ").toLowerCase();
-
-  const isBreakfast = text.includes("frühstück") || text.includes("pancake") || text.includes("waffel") || text.includes("oats") || text.includes("bowl");
-  const isDessert = text.includes("dessert") || text.includes("kuchen") || text.includes("süß") || text.includes("schoko") || text.includes("himbeer") || text.includes("erdbeer");
-
-  if(selected === "Alle") return true;
-
-  if(selected === "Frühstück"){
-    return isBreakfast;
-  }
-
-  if(selected === "Mittagessen"){
-    if(isBreakfast || isDessert) return false;
-    return text.includes("mittag") || text.includes("hauptgericht") || text.includes("herzhaft") || text.includes("nudel") || text.includes("pasta") || text.includes("reis") || text.includes("hähnchen") || text.includes("auflauf") || text.includes("suppe");
-  }
-
-  if(selected === "Abendbrot"){
-    if(isBreakfast || isDessert) return false;
-    return text.includes("abend") || text.includes("brot") || text.includes("wrap") || text.includes("toast") || text.includes("burger") || text.includes("snack");
-  }
-
-  if(selected === "Nudeln") return text.includes("nudel") || text.includes("pasta") || text.includes("spaghetti") || text.includes("makkaroni") || text.includes("tortellini");
-  if(selected === "Auflauf") return text.includes("auflauf") || text.includes("gratin") || text.includes("überbacken");
-  if(selected === "Suppe") return text.includes("suppe") || text.includes("eintopf");
-  if(selected === "Vegetarisch") return text.includes("vegetarisch") || text.includes("veggie") || text.includes("gemüse");
-  if(selected === "Snack") return text.includes("snack") || text.includes("wrap") || text.includes("toast") || text.includes("burger");
-  if(selected === "Dessert") return isDessert;
-
-  return true;
+function matchesSlot(r,slot){const t=recipeText(r),breakfast=/frühstück|pancake|waffel|oats|bowl|bagel|brötchen/.test(t),dessert=/dessert|kuchen|süß|pudding/.test(t);if(slot.id===1)return breakfast;if(slot.id===2)return !breakfast&&!dessert;if(slot.id===3)return !breakfast&&!dessert;return true}
+async function loadWeeklyPlan(){
+  await ensureRecipes();setView("plan");const c=document.getElementById("content");c.innerHTML=skeleton();
+  try{const plan=await requestJson(`/wochenplan?t=${Date.now()}`);c.innerHTML=`<div class="section-head"><div><span class="eyebrow">Deine Woche</span><h2 style="margin-top:8px">Wochenplan</h2><p>Plane Frühstück, Mittag und Abendessen – automatisch oder manuell.</p></div><div class="button-row"><button class="primary-btn" onclick="autoFillWeek()">✨ Automatisch planen</button><button class="secondary-btn" onclick="resetWeek()">Woche leeren</button></div></div>
+  ${!state.user?`<div class="panel" style="margin-bottom:14px"><strong>Gastmodus</strong><div class="hint">Melde dich an, damit dein Wochenplan geräteübergreifend gespeichert wird.</div></div>`:""}
+  <div class="week-grid">${DAYS.map(day=>`<article class="day-card"><h3>${day}</h3>${SLOTS.map(slot=>weekSlot(day,slot,plan)).join("")}</article>`).join("")}</div>`}catch(e){c.innerHTML=`<div class="empty">${escapeHtml(e.message)}</div>`}
 }
+function weekSlot(day,slot,plan){const id=plan?.[day]?.[slot.id]??plan?.[day]?.[String(slot.id)]??null,r=state.recipes.find(x=>+x.id===+id),options=state.recipes.filter(x=>matchesSlot(x,slot));return `<div class="slot"><div class="slot-label">${slot.name}</div>${r?`<div class="slot-recipe">${escapeHtml(r.name)}</div>${imageUrl(r)?`<img src="${escapeHtml(imageUrl(r))}" alt="">`:""}<div class="button-row" style="margin-top:8px"><button class="ghost-btn" onclick="showRecipe(${+r.id})">Öffnen</button><button class="ghost-btn" onclick="clearDaySlot('${day}',${slot.id})">✕</button></div>`:`<div class="hint" style="margin:5px 0">Noch frei</div>`}<select onchange="if(this.value)setDayRecipeSlot('${day}',${slot.id},this.value)"><option value="">${r?"Ersetzen":"Rezept auswählen"}</option>${options.map(x=>`<option value="${+x.id}">${escapeHtml(x.name)}</option>`).join("")}</select></div>`}
+async function setDayRecipeSlot(day,slot,id){try{await requestJson(`/wochenplan/${encodeURIComponent(day)}/${slot}/${+id}`,{method:"POST"});showToast("Eingeplant.");loadWeeklyPlan()}catch(e){showToast(e.message)}}
+async function clearDaySlot(day,slot){try{await requestJson(`/wochenplan/${encodeURIComponent(day)}/${slot}/0`,{method:"POST"});loadWeeklyPlan()}catch(e){showToast(e.message)}}
+async function autoFillWeek(){const used=new Set(),entries=[];for(const day of DAYS)for(const slot of SLOTS){let pool=state.recipes.filter(r=>matchesSlot(r,slot)&&!used.has(+r.id));if(!pool.length)pool=state.recipes.filter(r=>matchesSlot(r,slot));if(!pool.length)continue;const r=pool[Math.floor(Math.random()*pool.length)];used.add(+r.id);entries.push({day,slot:slot.id,recipe_id:+r.id})}try{await requestJson("/wochenplan/bulk",{method:"POST",body:JSON.stringify({entries})});showToast("Woche geplant.");loadWeeklyPlan()}catch(e){showToast(e.message)}}
+async function resetWeek(){if(!confirm("Kompletten Wochenplan leeren?"))return;try{await requestJson("/wochenplan/reset",{method:"POST"});loadWeeklyPlan()}catch(e){showToast(e.message)}}
 
-function drawRouletteRecipe(){
-  const selected = selectedMealType;
-  const result = document.getElementById("rouletteResult");
-  if(!result) return;
-
-  let pool = allRecipes.filter(recipe => recipeMatchesRouletteFilter(recipe, selected));
-
-  if(!pool.length){
-    result.innerHTML = `
-      <div class="empty-state">
-        <h2>Keine Rezepte gefunden</h2>
-        <p>Für "${selected}" gibt es aktuell keine passenden Rezepte.</p>
-        <button class="primary" onclick="selectedMealType='Alle'; drawRouletteRecipe()">Alle Rezepte ziehen</button>
-      </div>
-    `;
-    return;
-  }
-
-  let availablePool = pool.filter(recipe => !rouletteHistory.includes(Number(recipe.id)));
-
-  if(!availablePool.length){
-    rouletteHistory = [];
-    availablePool = pool;
-  }
-
-  let spinCount = 0;
-  const spinMax = 14;
-
-  const spinner = setInterval(() => {
-    const tempRecipe = pool[Math.floor(Math.random() * pool.length)];
-    const tempImg = imageUrl(tempRecipe);
-
-    result.innerHTML = `
-      <div class="roulette-result-card">
-        <div class="roulette-image-wrap">
-          ${tempImg ? `<img src="${escapeHtml(tempImg)}" alt="${escapeHtml(cleanRecipeText(tempRecipe.name))}">` : `<div class="placeholder">Kein Bild</div>`}
-        </div>
-        <div class="roulette-result-body">
-          <span class="badge">🎰 Dreht...</span>
-          <h2>${escapeHtml(cleanRecipeText(tempRecipe.name))}</h2>
-        </div>
-      </div>
-    `;
-
-    spinCount++;
-
-    if(spinCount >= spinMax){
-      clearInterval(spinner);
-
-      const winner = availablePool[Math.floor(Math.random() * availablePool.length)];
-      rouletteHistory.unshift(Number(winner.id));
-      rouletteHistory = rouletteHistory.slice(0, Math.min(12, Math.floor(pool.length * 0.7)));
-      localStorage.setItem("rouletteHistory", JSON.stringify(rouletteHistory));
-
-      const img = imageUrl(winner);
-
-      result.innerHTML = `
-        <div class="roulette-result-card">
-          <div class="roulette-image-wrap">
-            ${img ? `<img src="${escapeHtml(img)}" alt="${escapeHtml(cleanRecipeText(winner.name))}">` : `<div class="placeholder">Kein Bild</div>`}
-          </div>
-
-          <div class="roulette-result-body">
-            <span class="badge">🎉 Dein Treffer</span>
-            <h2>${escapeHtml(cleanRecipeText(winner.name))}</h2>
-
-            <div class="meta">
-              <span>⏱️ ${winner.kochzeit || "?"} Min</span>
-              <span>🔥 ${escapeHtml(winner.schwierigkeit || "Einfach")}</span>
-            </div>
-
-            <div class="buttons">
-              <button class="primary" onclick="showRecipe(${winner.id})">Rezept öffnen</button>
-              <button class="secondary" onclick="quickAddToPlan(${winner.id})">📅 Zum Wochenplan</button>
-              <button class="secondary" onclick="drawRouletteRecipe()">🔁 Nochmal ziehen</button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-  }, 120);
+async function quickAddToPlan(id){
+  document.getElementById("planModalContent").innerHTML=`<div class="modal-head"><h2>Rezept einplanen</h2><button class="icon-btn" onclick="closePlanModal()">✕</button></div><form class="form-stack" onsubmit="saveQuickPlan(event,${+id})"><label class="field"><span>Tag</span><select id="quickDay">${DAYS.map(x=>`<option>${x}</option>`).join("")}</select></label><label class="field"><span>Mahlzeit</span><select id="quickSlot">${SLOTS.map(x=>`<option value="${x.id}">${x.name}</option>`).join("")}</select></label><button class="primary-btn" type="submit">Einplanen</button></form>`;document.getElementById("planModal").classList.remove("hidden")
 }
+function closePlanModal(){document.getElementById("planModal").classList.add("hidden")}
+async function saveQuickPlan(e,id){e.preventDefault();try{await requestJson(`/wochenplan/${encodeURIComponent(quickDay.value)}/${+quickSlot.value}/${+id}`,{method:"POST"});closePlanModal();showToast("Eingeplant.")}catch(err){showToast(err.message)}}
 
-  function recipeMatchesSlot(recipe, slot){
-    const text = [
-      recipe.name || "",
-      recipe.kueche || "",
-      recipe.kategorie || "",
-      ...(recipe.tags || []),
-      ...(recipe.zutaten || [])
-    ].join(" ").toLowerCase();
-
-    const breakfast = text.includes("frühstück") || text.includes("pancake") || text.includes("waffel") || text.includes("bowl") || text.includes("bagel") || text.includes("brötchen") || text.includes("brot") || text.includes("oats");
-    const dessert = text.includes("dessert") || text.includes("kuchen") || text.includes("süß") || text.includes("pudding");
-
-    if(Number(slot.id) === 1) return breakfast;
-    if(Number(slot.id) === 2) return !breakfast && !dessert;
-    if(Number(slot.id) === 3) return !breakfast && !dessert;
-    return true;
-  }
-
-  async function loadWeeklyPlan(){
-    setActiveNav("plan");
-    hideHome();
-
-    const c = document.getElementById("content");
-    showSkeleton(c);
-
-    try{
-      await ensureRecipesLoaded();
-
-      const response = await fetch(`/wochenplan?t=${Date.now()}`, {cache: "no-store"});
-      if(!response.ok){
-        throw new Error(`Wochenplan konnte nicht geladen werden (${response.status})`);
-      }
-
-      const plan = await response.json();
-      const days = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"];
-      const slots = [
-        {id: 1, name: "Frühstück"},
-        {id: 2, name: "Mittag"},
-        {id: 3, name: "Abend"}
-      ];
-
-      c.innerHTML = `
-        <button class="secondary" onclick="showHome()">← Zurück</button>
-        <h2>📅 Wochenplan</h2>
-
-        <div class="buttons">
-          <button class="primary" type="button" onclick="autoFillWeek()">✨ Woche automatisch planen</button>
-          <button class="secondary" type="button" onclick="resetWeek()">🗑️ Woche leeren</button>
-        </div>
-
-        <div class="buttons" style="margin-top:14px;">
-          <button class="secondary" onclick="setWeekSlotFilter('Alle')">🍽️ Alle</button>
-          <button class="secondary" onclick="setWeekSlotFilter('Frühstück')">🌅 Frühstück</button>
-          <button class="secondary" onclick="setWeekSlotFilter('Mittag')">☀️ Mittag</button>
-          <button class="secondary" onclick="setWeekSlotFilter('Abend')">🌙 Abendessen</button>
-        </div>
-
-        <div class="grid">
-          ${days.map(day => `
-            <div class="card">
-              <div class="card-body">
-                <h3>📅 ${day}</h3>
-                ${slots
-                  .filter(slot => selectedWeekSlotFilter === "Alle" || slot.name === selectedWeekSlotFilter)
-                  .map(slot => {
-                    const recipeId = plan?.[day]?.[slot.id] ?? plan?.[day]?.[String(slot.id)] ?? null;
-                    const recipe = allRecipes.find(r => Number(r.id) === Number(recipeId));
-
-                    if(recipe){
-                      const safeName = escapeHtml(cleanRecipeText(recipe.name));
-                      const img = imageUrl(recipe);
-                      const safeImg = escapeHtml(img);
-
-                      return `
-                        <div style="margin:14px 0;padding:14px;border-radius:18px;background:var(--cream);">
-                          <strong>${slot.name}</strong>
-                          ${img ? `<img class="week-image" src="${safeImg}" alt="${safeName}">` : ""}
-                          <p class="week-title">${safeName}</p>
-                          <div class="card-actions">
-                            <button class="primary" type="button" onclick="event.stopPropagation(); showRecipe(${Number(recipe.id)})">Öffnen</button>
-                            <button class="secondary" type="button" onclick="event.stopPropagation(); clearDaySlot('${day}', ${slot.id})">❌ Entfernen</button>
-                          </div>
-                          <select onclick="event.stopPropagation()" onchange="setDayRecipeSlot('${day}', ${slot.id}, this.value)">
-                            <option value="">Rezept ersetzen</option>
-                            ${allRecipes.filter(r => recipeMatchesSlot(r, slot)).map(r => `<option value="${Number(r.id)}">${escapeHtml(cleanRecipeText(r.name))}</option>`).join("")}
-                          </select>
-                        </div>`;
-                    }
-
-                    return `
-                      <div style="margin:14px 0;padding:14px;border-radius:18px;background:var(--cream);">
-                        <strong>${slot.name}</strong>
-                        <p class="week-empty">Noch kein Rezept gewählt</p>
-                        <select onclick="event.stopPropagation()" onchange="setDayRecipeSlot('${day}', ${slot.id}, this.value)">
-                          <option value="">Rezept auswählen</option>
-                          ${allRecipes.filter(r => recipeMatchesSlot(r, slot)).map(r => `<option value="${Number(r.id)}">${escapeHtml(cleanRecipeText(r.name))}</option>`).join("")}
-                        </select>
-                      </div>`;
-                  }).join("")}
-              </div>
-            </div>`).join("")}
-        </div>`;
-
-    }catch(error){
-      console.error("Wochenplan laden fehlgeschlagen:", error);
-      c.innerHTML = `
-        <button class="secondary" onclick="showHome()">← Zurück</button>
-        <div class="error-box">❌ Wochenplan konnte nicht geladen werden. Bitte Seite neu laden oder später erneut versuchen.</div>`;
-    }
-  }
-
-async function setDayRecipeSlot(day, slot, id){
-  if(!id) return;
-
-  try{
-    const response = await fetch(
-      `/wochenplan/${encodeURIComponent(day)}/${Number(slot)}/${Number(id)}`,
-      {
-        method: "POST"
-      }
-    );
-
-    if(!response.ok){
-      throw new Error(`Speichern fehlgeschlagen (${response.status})`);
-    }
-
-    showToast("Zum Wochenplan hinzugefügt!");
-    await loadWeeklyPlan();
-
-  }catch(error){
-    console.error("Fehler beim Einplanen:", error);
-    showToast("Rezept konnte nicht eingeplant werden.");
-  }
-}
-async function clearDaySlot(day, slot){
-  const ok = confirm(`${day}: Diesen Eintrag wirklich entfernen?`);
-  if(!ok) return;
-
-  try{
-    const response = await fetch(`/wochenplan/${encodeURIComponent(day)}/${Number(slot)}/0`, {method: "POST"});
-    if(!response.ok){
-      throw new Error(`Entfernen fehlgeschlagen (${response.status})`);
-    }
-
-    showToast("Eintrag entfernt!");
-    await loadWeeklyPlan();
-  }catch(error){
-    console.error("Fehler beim Entfernen:", error);
-    showToast("Eintrag konnte nicht entfernt werden.");
-  }
-}
-async function autoFillWeek(){
-  showToast("Woche wird geplant...");
-
-  try{
-    await ensureRecipesLoaded();
-
-    const days = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"];
-    const slots = [
-      {id: 1, name: "Frühstück"},
-      {id: 2, name: "Mittag"},
-      {id: 3, name: "Abend"}
-    ];
-
-    const usedIds = new Set();
-    const entries = [];
-
-    for(const day of days){
-      for(const slot of slots){
-        const pool = allRecipes.filter(recipe => recipeMatchesSlot(recipe, slot));
-        if(!pool.length) continue;
-
-        const available = pool.filter(recipe => !usedIds.has(Number(recipe.id)));
-        const finalPool = available.length ? available : pool;
-        const recipe = finalPool[Math.floor(Math.random() * finalPool.length)];
-        if(!recipe) continue;
-
-        usedIds.add(Number(recipe.id));
-        entries.push({day, slot: slot.id, recipe_id: Number(recipe.id)});
-      }
-    }
-
-    if(!entries.length){
-      showToast("Keine passenden Rezepte für die Planung gefunden.");
-      return;
-    }
-
-    const response = await fetch("/wochenplan/bulk", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({entries})
-    });
-
-    if(!response.ok){
-      throw new Error(`Automatische Planung fehlgeschlagen (${response.status})`);
-    }
-
-    showToast("Woche automatisch geplant!");
-    await loadWeeklyPlan();
-  }catch(error){
-    console.error("Automatische Planung fehlgeschlagen:", error);
-    showToast("Automatische Planung fehlgeschlagen.");
-  }
-}
-async function resetWeek(){
-  const ok = confirm("Wirklich den kompletten Wochenplan leeren?");
-
-  if(!ok){
-    return;
-  }
-
-  try{
-    const response = await fetch("/wochenplan/reset", {
-      method: "POST"
-    });
-
-    if(!response.ok){
-      throw new Error("Serverfehler beim Leeren des Wochenplans");
-    }
-
-    showToast("Wochenplan geleert!");
-    await loadWeeklyPlan();
-
-  }catch(error){
-    console.error(error);
-    showToast("Woche konnte nicht geleert werden.");
-  }
-}   
-
-function normalizeFoodName(text){
-  return String(text || "")
-    .toLowerCase()
-    .replace(/[0-9]+([.,][0-9]+)?/g, "")
-    .replace(/\b(g|kg|ml|l|el|tl|stück|stk|dose|dosen|packung|päckchen)\b/g, "")
-    .replace(/[^\p{L}\s-]/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
+function normalizeFoodName(v){return String(v||"").toLowerCase().replace(/[0-9]+([.,][0-9]+)?/g,"").replace(/\b(g|kg|ml|l|el|tl|stück|stk|dose|dosen|packung|päckchen)\b/g,"").replace(/[^\p{L}\s-]/gu," ").replace(/\s+/g," ").trim()}
 async function loadShoppingList(){
-  setActiveNav("list");
-  hideHome();
+  setView("list");const c=document.getElementById("content");c.innerHTML=skeleton();try{const d=await requestJson(`/einkaufsliste?t=${Date.now()}`),cats=d.categories||{},atHome=state.atHome.map(normalizeFoodName);const filtered={};for(const [cat,items] of Object.entries(cats)){const rows=items.filter(i=>!atHome.some(h=>h&&normalizeFoodName(i).includes(h)));if(rows.length)filtered[cat]=rows}c.innerHTML=`<div class="section-head"><div><span class="eyebrow">Aus deinem Plan</span><h2 style="margin-top:8px">Einkaufsliste</h2><p>Automatisch aus den geplanten Rezepten zusammengestellt.</p></div><button class="secondary-btn" onclick="copyShoppingList()">Liste kopieren</button></div>
+  <div class="shopping-columns"><aside class="panel"><h3>🏠 Habe ich zuhause</h3><p class="hint">Diese Zutaten werden aus der Einkaufsliste ausgeblendet.</p><textarea id="atHomeInput" placeholder="Milch&#10;Eier&#10;Mehl">${escapeHtml(state.atHome.join("\n"))}</textarea><button class="primary-btn" style="width:100%;margin-top:9px" onclick="saveAtHome()">Speichern & neu berechnen</button></aside><div>${Object.keys(filtered).length?Object.entries(filtered).map(([cat,items])=>`<section class="panel" style="margin-bottom:12px"><h3>${escapeHtml(cat)}</h3><div class="shopping-list">${items.map((x,i)=>`<label class="shopping-item"><input type="checkbox" onchange="this.parentElement.classList.toggle('done',this.checked)"><span class="shopping-item-text">${escapeHtml(x)}</span></label>`).join("")}</div></section>`).join(""):`<div class="empty"><h3>Nichts einzukaufen</h3><p>Dein Wochenplan ist leer oder du hast alles bereits zuhause.</p><button class="primary-btn" onclick="loadWeeklyPlan()">Zum Wochenplan</button></div>`}</div></div>`}catch(e){c.innerHTML=`<div class="empty">${escapeHtml(e.message)}</div>`}
+}
+async function saveAtHome(){state.atHome=atHomeInput.value.split(/\n|,|;/).map(x=>x.trim()).filter(Boolean);if(state.user){try{await requestJson("/at-home",{method:"PUT",body:JSON.stringify({items:state.atHome})})}catch(e){return showToast(e.message)}}else localStorage.setItem("atHomeIngredients",JSON.stringify(state.atHome));showToast("Gespeichert.");loadShoppingList()}
+function copyShoppingList(){const items=[...document.querySelectorAll(".shopping-item-text")].map(x=>x.textContent.trim());if(!items.length)return showToast("Keine Zutaten zum Kopieren.");navigator.clipboard?.writeText(items.join("\n")).then(()=>showToast("Einkaufsliste kopiert.")).catch(()=>showToast("Kopieren nicht möglich."))}
 
-  const c = document.getElementById("content");
-  showSkeleton(c);
+async function loadFoodRescue(){
+  await ensureRecipes();setView("rescue");document.getElementById("content").innerHTML=`<div class="section-head"><div><span class="eyebrow">Lebensmittel retten</span><h2 style="margin-top:8px">Was hast du noch zuhause?</h2><p>Gib vorhandene Zutaten ein. Wir zeigen Rezepte, die dazu passen.</p></div></div><div class="shopping-columns"><aside class="panel"><textarea id="rescueInput" placeholder="Paprika&#10;Reis&#10;Eier">${escapeHtml(state.pantry.join("\n"))}</textarea><div class="button-row" style="margin-top:10px"><button class="primary-btn" onclick="findRescueRecipes()">Rezepte finden</button><button class="secondary-btn" onclick="savePantry()">Vorrat speichern</button></div></aside><div id="rescueResults"><div class="empty">Gib Zutaten ein, um loszulegen.</div></div></div>`;
+}
+async function savePantry(){state.pantry=rescueInput.value.split(/\n|,|;/).map(x=>x.trim()).filter(Boolean);if(state.user){try{await requestJson("/pantry",{method:"PUT",body:JSON.stringify({items:state.pantry})})}catch(e){return showToast(e.message)}}else localStorage.setItem("pantry",JSON.stringify(state.pantry));showToast("Vorrat gespeichert.")}
+function findRescueRecipes(){const available=rescueInput.value.split(/\n|,|;/).map(normalizeFoodName).filter(Boolean);if(!available.length)return showToast("Bitte Zutaten eingeben.");const scored=state.recipes.map(r=>{const ingredients=(r.zutaten||[]).map(normalizeFoodName),matches=available.filter(a=>ingredients.some(i=>i.includes(a)||a.includes(i)));return{r,score:matches.length,matches}}).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);rescueResults.innerHTML=scored.length?`<div class="recipe-grid">${scored.slice(0,12).map(x=>recipeCard(x.r)).join("")}</div>`:`<div class="empty"><h3>Keine direkte Übereinstimmung</h3><p>Versuche allgemeinere Begriffe wie „Tomate“, „Reis“ oder „Käse“.</p></div>`}
 
-  try{
-    const response = await fetch(`/einkaufsliste?t=${Date.now()}`, {cache: "no-store"});
-    if(!response.ok){
-      throw new Error(`Einkaufsliste konnte nicht geladen werden (${response.status})`);
-    }
+function showCreateRecipe(){
+  document.getElementById("accountModalContent").innerHTML=`<div class="modal-head"><h2>Eigenes Rezept</h2><button class="icon-btn" onclick="closeAccountModal()">✕</button></div><form class="form-stack" onsubmit="createOwnRecipe(event)"><label class="field"><span>Name</span><input id="ownName" required></label><div class="form-grid"><label class="field"><span>Küche</span><input id="ownKitchen" value="Eigene Küche"></label><label class="field"><span>Kochzeit (Min)</span><input id="ownTime" type="number" min="1" value="30"></label></div><label class="field"><span>Kurzbeschreibung</span><textarea id="ownDescription"></textarea></label><label class="field"><span>Zutaten – eine pro Zeile</span><textarea id="ownIngredients" required></textarea></label><label class="field"><span>Zubereitung – ein Schritt pro Zeile</span><textarea id="ownSteps" required></textarea></label><button class="primary-btn" type="submit">Rezept speichern</button></form>`;document.getElementById("accountModal").classList.remove("hidden")
+}
+async function createOwnRecipe(e){e.preventDefault();const payload={name:ownName.value,kueche:ownKitchen.value,kochzeit:+ownTime.value,portionen:2,schwierigkeit:"Einfach",description:ownDescription.value,tags:["Eigenes Rezept"],zutaten:ownIngredients.value.split("\n").map(x=>x.trim()).filter(Boolean),anleitung:ownSteps.value.split("\n").map((x,i)=>`${i+1}. ${x.trim()}`).filter(Boolean).join("\n")};try{const r=await requestJson("/rezept-erstellen",{method:"POST",body:JSON.stringify(payload)});closeAccountModal();await ensureRecipes(true);showRecipe(r.id);showToast("Rezept gespeichert.")}catch(err){showToast(err.message)}}
+async function deleteOwnRecipe(id){if(!confirm("Eigenes Rezept wirklich löschen?"))return;try{await requestJson(`/rezepte/${id}`,{method:"DELETE"});await ensureRecipes(true);loadRecipes();showToast("Rezept gelöscht.")}catch(e){showToast(e.message)}}
 
-    const data = await response.json();
-    const categories = data.categories || {};
-    const atHome = (atHomeIngredients || [])
-      .map(x => String(x).trim())
-      .filter(Boolean);
+function startCookMode(id){const r=state.recipes.find(x=>+x.id===+id);if(!r)return;state.cookSteps=parseSteps(r.anleitung);state.cookIndex=0;document.getElementById("cookTitle").textContent=r.name;document.getElementById("cookDrawer").classList.remove("hidden");updateCookStep()}
+function updateCookStep(){document.getElementById("cookStep").innerHTML=state.cookSteps.length?`<div class="hint">Schritt ${state.cookIndex+1} von ${state.cookSteps.length}</div>${escapeHtml(state.cookSteps[state.cookIndex])}`:"Keine Schritte vorhanden."}
+function nextCookStep(){if(state.cookIndex<state.cookSteps.length-1){state.cookIndex++;updateCookStep()}else showToast("Fertig – guten Appetit!")}
+function previousCookStep(){if(state.cookIndex>0){state.cookIndex--;updateCookStep()}}
+function closeCookMode(){document.getElementById("cookDrawer").classList.add("hidden")}
+async function shareRecipe(id){const r=state.recipes.find(x=>+x.id===+id),url=`${location.origin}${location.pathname}?recipe=${id}`;try{if(navigator.share)await navigator.share({title:r.name,text:r.description||"",url});else{await navigator.clipboard.writeText(url);showToast("Link kopiert.")}}catch(_){}}
 
-    const filteredCategories = {};
-
-    Object.entries(categories).forEach(([category, items]) => {
-      const filteredItems = (items || []).filter(item => {
-        const itemName = normalizeFoodName(item);
-        return !atHome.some(homeItem => {
-          const homeName = normalizeFoodName(homeItem);
-          return homeName && itemName === homeName;
-        });
-      });
-
-      if(filteredItems.length) filteredCategories[category] = filteredItems;
-    });
-
-    const hasItems = Object.keys(filteredCategories).length > 0;
-
-    c.innerHTML = `
-      <button class="secondary" onclick="showHome()">← Zurück</button>
-      <h2>🛒 Einkaufsliste</h2>
-
-      <div class="panel" style="margin:18px 0;display:grid;gap:12px;">
-        <h3>🏠 Habe ich zuhause</h3>
-        <p class="muted">Trage Zutaten ein, die nicht auf die Einkaufsliste sollen.</p>
-        <textarea id="atHomeInput" placeholder="Milch&#10;Mehl&#10;Eier">${escapeHtml(atHome.join("\n"))}</textarea>
-        <button class="primary" onclick="saveAtHomeIngredients()">Liste neu berechnen</button>
-      </div>
-
-      <button class="secondary" onclick="copyShoppingList()">Liste kopieren</button>
-
-      ${hasItems ? `
-        <div class="shopping-list">
-          ${Object.entries(filteredCategories).map(([category, items]) => `
-            <div class="panel" style="margin-top:18px;">
-              <h3>${escapeHtml(category)}</h3>
-              <div class="shopping-list">
-                ${items.map(i => `
-                  <label class="shopping-item">
-                    <input type="checkbox">
-                    <span class="shopping-item-text">${escapeHtml(i)}</span>
-                  </label>`).join("")}
-              </div>
-            </div>`).join("")}
-        </div>` : `
-        <div class="empty-state">
-          <h2>🛒 Nichts einzukaufen</h2>
-          <p>Entweder ist dein Wochenplan leer oder du hast alle Zutaten bereits zuhause.</p>
-          <button class="primary" onclick="loadWeeklyPlan()">Zum Wochenplan</button>
-        </div>`}
-    `;
-  }catch(error){
-    console.error("Einkaufsliste laden fehlgeschlagen:", error);
-    c.innerHTML = `<button class="secondary" onclick="showHome()">← Zurück</button><div class="error-box">❌ Einkaufsliste konnte nicht geladen werden.</div>`;
-  }
+async function toggleDarkMode(){
+  document.body.classList.toggle("dark");const theme=document.body.classList.contains("dark")?"dark":"light";localStorage.setItem("theme",theme);document.getElementById("themeButton").textContent=theme==="dark"?"☀️":"🌙";
+  if(state.user)try{await requestJson("/preferences",{method:"PUT",body:JSON.stringify({preferences:{theme}})})}catch(_){}
 }
 
-async function saveAtHomeIngredients(){
-  const value = document.getElementById("atHomeInput")?.value || "";
-  const items = value.split(/\n|,|;/).map(x => x.trim()).filter(Boolean);
-  atHomeIngredients = items;
-  if(currentUser){
-    try{ await requestJson("/at-home", {method:"PUT", body:JSON.stringify({items})}); }
-    catch(error){ return showToast(error.message); }
-  }else{
-    localStorage.setItem("atHomeIngredients", JSON.stringify(items));
-  }
-  showToast("Vorhandene Zutaten gespeichert!");
-  loadShoppingList();
+async function initializeApp(){
+  if(localStorage.getItem("theme")==="dark")document.body.classList.add("dark");
+  document.getElementById("themeButton").textContent=document.body.classList.contains("dark")?"☀️":"🌙";
+  await initializeAuth();
+  await ensureRecipes();
+  const params=new URLSearchParams(location.search),recipe=params.get("recipe");
+  if(recipe)showRecipe(+recipe);else showHome();
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/static/service-worker.js").catch(()=>{});
 }
-
-
-function copyShoppingList(){
-  const items = [...document.querySelectorAll(".shopping-item-text")]
-    .map(el => el.textContent.trim())
-    .filter(Boolean);
-
-  if(!items.length){
-    showToast("Keine Zutaten zum Kopieren.");
-    return;
-  }
-
-  navigator.clipboard.writeText(items.join("\n"))
-    .then(() => showToast("Einkaufsliste kopiert!"))
-    .catch(() => showToast("Kopieren nicht möglich."));
-}
-
-
-    function loadFoodRescue(){setActiveNav("rescue");hideHome();document.getElementById("content").innerHTML=`<button class="secondary" onclick="showHome()">← Zurück</button><div class="panel" style="display:grid;gap:16px;margin-top:20px;"><div><span class="hero-badge">♻️ Food Rescue</span><h1>Was hast du noch zuhause?</h1><p class="muted">Gib Lebensmittel ein, die du verwerten möchtest. Die App sucht passende Rezepte.</p></div><textarea id="rescueInput" placeholder="Zum Beispiel:&#10;Sahne&#10;Paprika&#10;Reis&#10;Eier&#10;Käse">${escapeHtml(pantry.join("\n"))}</textarea><div class="buttons"><button class="primary" onclick="findRescueRecipes()">Lebensmittel retten</button><button class="secondary" onclick="savePantry()">Vorrat speichern</button></div></div><div id="rescueResults" style="margin-top:28px;"></div>`}
-    async function savePantry(){
-      pantry = document.getElementById("rescueInput").value.split(/\n|,|;/).map(x=>x.trim()).filter(Boolean);
-      if(currentUser){
-        try{ await requestJson("/pantry", {method:"PUT", body:JSON.stringify({items:pantry})}); }
-        catch(error){ return showToast(error.message); }
-      }else{
-        localStorage.setItem("pantry", JSON.stringify(pantry));
-      }
-      showToast("Vorrat gespeichert!");
-    }
-
-    async function findRescueRecipes(){
-  const input = document.getElementById("rescueInput").value;
-
-  const available = input
-    .split(/\n|,|;/)
-    .map(x => x.trim().toLowerCase())
-    .filter(Boolean);
-
-  if(!available.length) return showToast("Bitte Zutaten eingeben.");
-
-  await ensureRecipesLoaded();
-
-  const existingResults = allRecipes.map(recipe => {
-    const recipeIngredients = (recipe.zutaten || [])
-      .map(z => String(z).toLowerCase());
-
-    const matches = available.filter(item => {
-  const wanted = normalizeFoodName(item);
-
-  if(!wanted) return false;
-
-  return recipeIngredients.some(zutat => {
-    const ingredientName = normalizeFoodName(zutat);
-
-    return ingredientName === wanted;
-  });
-});
-
-    return { recipe, matches, score: matches.length };
-  })
-  .filter(r => r.score > 0)
-  .sort((a,b) => b.score - a.score);
-
-  const rescueIdeas = createRescueIdeasStrict(available);
-
-  document.getElementById("rescueResults").innerHTML = `
-    <h2>♻️ Food-Rescue-Ideen</h2>
-
-    ${rescueIdeas.length ? `
-      <div class="grid">
-        ${rescueIdeas.map(rescueIdeaCard).join("")}
-      </div>
-    ` : ""}
-
-    ${existingResults.length ? `
-      <h2 style="margin-top:34px;">📚 Rezepte mit deinen Lebensmitteln</h2>
-      <div class="grid">
-        ${existingResults.map(r => recipeCard(r.recipe)).join("")}
-      </div>
-    ` : `
-      <div class="empty-state" style="margin-top:24px;">
-        <h2>Keine gespeicherten Rezepte gefunden</h2>
-        <p>Ich habe aber oben passende Ideen aus deinen Zutaten erstellt.</p>
-      </div>
-    `}
-  `;
-}
-
-function createRescueIdeasStrict(items){
-  const text = items.join(" ");
-  const ideas = [];
-
-  const normalizedItems = items.map(item => normalizeFoodName(item));
-
-  const hasSavoryBase = normalizedItems.some(item =>
-    [
-      "kartoffeln",
-      "reis",
-      "nudeln",
-      "pasta",
-      "gemüse",
-      "paprika",
-      "zucchini",
-      "brokkoli",
-      "pilze",
-      "champignons",
-      "zwiebel",
-      "hähnchen",
-      "hackfleisch",
-      "tofu",
-      "ei",
-      "eier"
-    ].some(keyword => item.includes(keyword))
-  );
-
-  if(items.length >= 2 && hasSavoryBase){
-    ideas.push({
-      name: "Restepfanne aus deinen Zutaten",
-      icon: "♻️",
-      ingredients: items,
-      steps: [
-        "Alle eingegebenen Lebensmittel prüfen und bei Bedarf waschen oder schälen.",
-        "Feste Zutaten klein schneiden, damit sie gleichmäßig garen.",
-        "Eine Pfanne mit etwas Öl erhitzen.",
-        "Die Zutaten nach Garzeit anbraten: harte Zutaten zuerst, weiche Zutaten später.",
-        "Alles mit Salz, Pfeffer und passenden Gewürzen abschmecken.",
-        "Kurz weiterbraten, bis alles heiß und gut vermengt ist.",
-        "Direkt servieren."
-      ]
-    });
-  }
-
-  if(text.includes("nudel") || text.includes("pasta")){
-    ideas.push({
-      name: "Nudelgericht aus deinen Resten",
-      icon: "🍝",
-      ingredients: items,
-      steps: [
-        "Nudeln in Salzwasser bissfest kochen.",
-        "Die restlichen eingegebenen Zutaten klein schneiden.",
-        "Alles in einer Pfanne kurz anbraten.",
-        "Etwas Nudelwasser dazugeben, damit eine leichte Soße entsteht.",
-        "Die Nudeln unterheben.",
-        "Mit Salz, Pfeffer und Gewürzen abschmecken.",
-        "Warm servieren."
-      ]
-    });
-  }
-
-  if(text.includes("sahne")){
-    ideas.push({
-      name: "Cremige Sahnepfanne",
-      icon: "🥘",
-      ingredients: items,
-      steps: [
-        "Alle eingegebenen Zutaten klein schneiden.",
-        "Eine Pfanne erhitzen und die festen Zutaten zuerst anbraten.",
-        "Sahne dazugeben und alles kurz einköcheln lassen.",
-        "Die Soße mit Salz, Pfeffer und Kräutern abschmecken.",
-        "Alles gut vermengen.",
-        "Heiß servieren."
-      ]
-    });
-  }
-
-  if(text.includes("ketchup") || text.includes("tomate")){
-    ideas.push({
-      name: "Tomatige Restepfanne",
-      icon: "🍅",
-      ingredients: items,
-      steps: [
-        "Die eingegebenen Zutaten klein schneiden.",
-        "Alles in einer Pfanne anbraten.",
-        "Ketchup, Tomaten oder Tomatenmark einrühren.",
-        "Bei Bedarf einen kleinen Schluck Wasser hinzufügen.",
-        "Kurz köcheln lassen.",
-        "Mit Salz, Pfeffer und Paprika abschmecken.",
-        "Warm servieren."
-      ]
-    });
-  }
-
-  return ideas;
-}
-
-function rescueIdeaCard(idea){
-  return `
-    <div class="card">
-      <div class="card-body">
-        <h3>${escapeHtml(idea.icon)} ${escapeHtml(idea.name)}</h3>
-        <div class="meta">Aus deinen Zutaten erstellt</div>
-        <h4>Zutaten-Idee</h4>
-        <div class="ingredients">
-          ${(idea.ingredients || []).map(i => `<div class="ingredient">✓ ${escapeHtml(i)}</div>`).join("")}
-        </div>
-        <h4 style="margin-top:18px;">Anleitung</h4>
-        <div class="steps">
-          ${(idea.steps || []).map((s, i) => `<div class="step">${i + 1}. ${escapeHtml(s)}</div>`).join("")}
-        </div>
-      </div>
-    </div>`;
-}
-  let selectedRecipeId = null;
-  let selectedDay = null;
-
-  function quickAddToPlan(id){
-  selectedRecipeId = id;
-  selectedDay = null;
-
-  const days = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"];
-
-  document.getElementById("dayButtons").innerHTML = days.map(day => `
-    <button onclick="selectPlanDay('${day}')">${day}</button>
-  `).join("");
-
-  document.getElementById("planModal").classList.remove("hidden");
-}
-
-  function selectPlanDay(day){
-  selectedDay = day;
-  showToast(`${day} gewählt`);
-}
-
-  async function selectPlanSlot(slot){
-    if(!selectedRecipeId) return showToast("Kein Rezept gewählt");
-    if(!selectedDay) return showToast("Bitte zuerst einen Tag wählen");
-
-    try{
-      const response = await fetch(`/wochenplan/${encodeURIComponent(selectedDay)}/${Number(slot)}/${Number(selectedRecipeId)}`, {method: "POST"});
-      if(!response.ok){
-        throw new Error(`Speichern fehlgeschlagen (${response.status})`);
-      }
-
-      showToast("Zum Wochenplan hinzugefügt");
-      closePlanModal();
-      await loadWeeklyPlan();
-    }catch(error){
-      console.error("Einplanen fehlgeschlagen:", error);
-      showToast("Fehler beim Speichern");
-    }
-  }
-
-function closePlanModal(){
-  document.getElementById("planModal").classList.add("hidden");
-}
-  
-
-    async function toggleFavorite(id){
-      id = Number(id);
-      if(currentUser){
-        try{
-          const data = await requestJson(`/favorites/${id}/toggle`, {method:"POST"});
-          favorites = (data.ids || []).map(Number);
-          showToast(data.favorite ? "Zu Favoriten hinzugefügt" : "Aus Favoriten entfernt");
-        }catch(error){ return showToast(error.message); }
-      }else{
-        if(favorites.includes(id)){favorites=favorites.filter(f=>Number(f)!==id);showToast("Aus Favoriten entfernt")}
-        else{favorites.push(id);showToast("Zu Favoriten hinzugefügt")}
-        localStorage.setItem("favorites",JSON.stringify(favorites));
-      }
-      if(document.getElementById("recipeGrid")) renderRecipes();
-      if(!document.getElementById("home").classList.contains("hidden")) renderHomeSections();
-    }
-    function isFavorite(id){return favorites.includes(Number(id))}
-
-    async function loadFavorites(){setActiveNav("favorites");hideHome();await ensureRecipesLoaded();const fav=allRecipes.filter(r=>isFavorite(r.id));document.getElementById("content").innerHTML=`<button class="secondary" onclick="showHome()">← Zurück</button><h2>❤️ Deine Favoriten</h2>${fav.length?`<div class="grid" id="recipeGrid">${fav.map(recipeCard).join("")}</div>`:`<div class="empty-state"><h2>❤️ Noch keine Favoriten</h2><p>Speichere dein erstes Lieblingsrezept.</p><button class="primary" onclick="loadRecipes()">Rezepte entdecken</button></div>`}`}
-
-    function saveRecentRecipe(recipe){recentRecipes=recentRecipes.filter(r=>Number(r.id)!==Number(recipe.id));recentRecipes.unshift({id:recipe.id,name:recipe.name,bild:recipe.bild,image:recipe.image,image_url:recipe.image_url,kueche:recipe.kueche,kochzeit:recipe.kochzeit,schwierigkeit:recipe.schwierigkeit,tags:recipe.tags||[]});recentRecipes=recentRecipes.slice(0,6);localStorage.setItem("recentRecipes",JSON.stringify(recentRecipes))}
-    function loadRecentRecipes(){setActiveNav("recent");hideHome();document.getElementById("content").innerHTML=`<button class="secondary" onclick="showHome()">← Zurück</button><h2>🕘 Zuletzt angesehen</h2>${recentRecipes.length?`<div class="grid">${recentRecipes.map(recipeCard).join("")}</div>`:`<div class="empty-state"><h2>🕘 Noch keine zuletzt angesehenen Rezepte</h2><p>Öffne ein Rezept, dann erscheint es hier.</p><button class="primary" onclick="loadRecipes()">Rezepte entdecken</button></div>`}`}
-
-    function ratingStars(id){const current=ratings[id]||0;return `<div class="rating">${[1,2,3,4,5].map(s=>`<button onclick="setRating(${id},${s})">${s<=current?"⭐":"☆"}</button>`).join("")}</div>`}
-    async function setRating(id,value){
-      ratings[id] = value;
-      if(currentUser){
-        try{ await requestJson(`/ratings/${Number(id)}`, {method:"PUT", body:JSON.stringify({rating:Number(value)})}); }
-        catch(error){ return showToast(error.message); }
-      }else{
-        localStorage.setItem("ratings", JSON.stringify(ratings));
-      }
-      showToast("Bewertung gespeichert!");
-      showRecipe(id);
-    }
-
-    async function shareRecipe(id){
-  await ensureRecipesLoaded();
-
-  const recipe = allRecipes.find(r => Number(r.id) === Number(id));
-
-  if(!recipe){
-    showToast("Rezept nicht gefunden.");
-    return;
-  }
-
-  const url = new URL(window.location.href);
-
-  url.searchParams.set("recipe", Number(recipe.id));
-
-  const shareData = {
-    title: cleanRecipeText(recipe.name),
-    text: `${cleanRecipeText(recipe.name)} auf Rezeptroulette`,
-    url: url.toString()
-  };
-
-  try{
-    if(navigator.share){
-      await navigator.share(shareData);
-    }else{
-      await navigator.clipboard.writeText(url.toString());
-      showToast("Rezept-Link kopiert!");
-    }
-  }catch(error){
-    if(error.name !== "AbortError"){
-      console.error("Fehler beim Teilen:", error);
-      showToast("Rezept konnte nicht geteilt werden.");
-    }
-  }
-}
-
-  async function startCookMode(id){
-  await ensureRecipesLoaded();
-  const recipe = allRecipes.find(r => Number(r.id) === Number(id));
-  if(!recipe) return;
-
-  cookSteps = String(recipe.anleitung || "Keine Anleitung vorhanden.")
-    .replaceAll("\\n", "\n")
-    .split(/\n|(?=\d+\.\s)/)
-    .map(s => s.trim())
-    .filter(Boolean);
-
-  cookIndex = 0;
-  document.getElementById("cookTitle").textContent = `👨‍🍳 ${cleanRecipeText(recipe.name)}`;
-  updateCookStep();
-  document.getElementById("cookDrawer").classList.add("show");
-}
-    function updateCookStep(){document.getElementById("cookStep").textContent=cookSteps[cookIndex]||"Fertig!"}
-    function nextCookStep(){if(cookIndex < cookSteps.length){cookIndex++;}updateCookStep();}
-    function previousCookStep(){if(cookIndex>0)cookIndex--;updateCookStep()}
-    function closeCookMode(){document.getElementById("cookDrawer").classList.remove("show")}
-
-    function toggleDarkMode(){document.body.classList.toggle("dark");localStorage.setItem("darkMode",document.body.classList.contains("dark"))}
-    if(localStorage.getItem("darkMode")==="true")document.body.classList.add("dark");
-
-    async function initializeApp(){
-      try{
-        await initializeAuth();
-      }catch(error){
-        console.error("Auth-Start fehlgeschlagen:", error);
-      }
-
-      showHome();
-
-      try{
-        await ensureRecipesLoaded();
-        const sharedRecipeId = new URLSearchParams(window.location.search).get("recipe");
-        if(sharedRecipeId){
-          await showRecipe(Number(sharedRecipeId));
-        }
-      }catch(error){
-        console.error("App-Start fehlgeschlagen:", error);
-      }
-    }
-
-    initializeApp();
-
-    async function backToRecipes(){await loadRecipes();setTimeout(()=>{window.scrollTo({top:recipeScrollPosition,behavior:"auto"})},100)}
-    async function goBackFromRecipe(){
-      if(previousView === "favorites") return loadFavorites();
-      if(previousView === "recent") return loadRecentRecipes();
-      if(previousView === "rescue") return loadFoodRescue();
-      if(previousView === "plan") return loadWeeklyPlan();
-      if(previousView === "list") return loadShoppingList();
-      return backToRecipes();
-    }
-  </script>
-  <div id="planModal" class="modal hidden">
-  <div class="modal-box">
-    <h3>📅 Rezept einplanen</h3>
-
-    <p>Tag wählen:</p>
-    <div id="dayButtons" class="modal-grid"></div>
-
-    <p>Mahlzeit wählen:</p>
-    <div class="modal-grid">
-      <button onclick="selectPlanSlot(1)">🌅 Frühstück</button>
-      <button onclick="selectPlanSlot(2)">🍝 Mittag</button>
-      <button onclick="selectPlanSlot(3)">🌙 Abend</button>
-    </div>
-
-    <div style="margin-top:20px;">
-      <button class="secondary" onclick="closePlanModal()">Abbrechen</button>
-    </div>
-  </div>
-</div>
-
-<div id="accountModal" class="modal hidden" onclick="if(event.target===this) closeAccountModal()">
-  <div class="modal-box">
-    <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
-      <button class="secondary" onclick="closeAccountModal()">✕</button>
-    </div>
-    <div id="accountModalContent"></div>
-  </div>
-</div>
+initializeApp();
+</script>
 </body>
 </html>
