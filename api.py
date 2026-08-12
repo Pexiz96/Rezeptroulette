@@ -7,7 +7,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from dataclasses import asdict
 
-from fastapi import FastAPI, HTTPException, Request, Response, Depends
+from fastapi import FastAPI, HTTPException, Request, Response, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -260,6 +260,8 @@ def require_user(request: Request):
         raise HTTPException(status_code=401, detail="Bitte zuerst anmelden")
     return user
 
+
+
 @app.post("/auth/register")
 def register(credentials: AuthCredentials, request: Request, response: Response):
     email = validate_email(credentials.email)
@@ -302,6 +304,29 @@ def logout(request: Request, response: Response):
     response.delete_cookie(SESSION_COOKIE, path="/")
     return {"ok": True}
 
+@app.delete("/admin/reset-users")
+def reset_users(x_admin_key: str = Header(default="")):
+    expected_key = os.getenv("ADMIN_RESET_KEY", "")
+
+    if not expected_key or x_admin_key != expected_key:
+        raise HTTPException(
+            status_code=403,
+            detail="Nicht erlaubt"
+        )
+
+    db = get_db()
+
+    try:
+        db.conn.execute("PRAGMA foreign_keys = ON")
+        db.conn.execute("DELETE FROM users")
+        db.conn.commit()
+
+        return {
+            "ok": True,
+            "message": "Alle Benutzerkonten wurden gelöscht."
+        }
+    finally:
+        db.conn.close()
 
 @app.get("/auth/me")
 def me(user=Depends(require_user)):
