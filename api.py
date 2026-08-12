@@ -4,9 +4,10 @@ import base64
 import hashlib
 import hmac
 import secrets
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from dataclasses import asdict
-
+from config import DB_PATH
 from fastapi import FastAPI, HTTPException, Request, Response, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -314,19 +315,29 @@ def reset_users(x_admin_key: str = Header(default="")):
             detail="Nicht erlaubt"
         )
 
-    db = get_db()
+    conn = sqlite3.connect(
+        DB_PATH,
+        timeout=30
+    )
 
     try:
-        db.conn.execute("PRAGMA foreign_keys = ON")
-        db.conn.execute("DELETE FROM users")
-        db.conn.commit()
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA busy_timeout = 30000")
+
+        conn.execute("DELETE FROM users")
+        conn.commit()
 
         return {
             "ok": True,
-            "message": "Alle Benutzerkonten wurden gelöscht."
+            "message": "Alle Benutzerkonten und Benutzerdaten wurden gelöscht."
         }
+
+    except Exception:
+        conn.rollback()
+        raise
+
     finally:
-        db.conn.close()
+        conn.close()
 
 @app.get("/auth/me")
 def me(user=Depends(require_user)):
