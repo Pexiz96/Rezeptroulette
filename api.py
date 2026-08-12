@@ -156,6 +156,13 @@ class ItemsPayload(BaseModel):
 app = FastAPI()
 
 startup_db = Database(initialize=True)
+
+if os.getenv("RESET_USERS_ON_STARTUP") == "true":
+    startup_db.conn.execute("PRAGMA foreign_keys = ON")
+    startup_db.conn.execute("DELETE FROM users")
+    startup_db.conn.commit()
+    print("Alle Benutzer und Benutzerdaten wurden zurückgesetzt.")
+
 startup_db.conn.close()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
