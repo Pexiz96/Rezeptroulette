@@ -1,5 +1,5 @@
 <h1>
-  <img src="docs/Rezeptroulette.png" width="50" align="center" alt="RezeptRoulette Logo">
+  <img src="docs/screenshots/Rezeptroulette.png" width="50" align="center" alt="RezeptRoulette Logo">
   RezeptRoulette
 </h1>
 
