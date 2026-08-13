@@ -13,6 +13,10 @@ env/
 .env.*
 !.env.example
 
+# Database files
+*.sqlite3
+*.db
+
 # IDE / Editor files
 .vscode/
 .idea/
