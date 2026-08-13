@@ -18,3 +18,25 @@ organizing recipes, and creating shopping lists.
 ## 📸 Preview
 
 ![RezeptRoulette Home Page](docs/screenshots/Rezeptroulette_Home.png)
+
+## ✨ Features
+
+- 🎲 **Recipe Roulette** – Get a random recipe suggestion when you don't know what to cook
+- 🔍 **Recipe Discovery** – Browse and discover available recipes
+- 📅 **Weekly Meal Planner** – Plan breakfast, lunch, and dinner for the entire week
+- 🛒 **Smart Shopping List** – Automatically generate a shopping list from your meal plan
+- ♻️ **Food Rescue** – Find recipes based on ingredients you already have
+- ❤️ **Favorites** – Save your favorite recipes for quick access
+- ⭐ **Recipe Ratings** – Rate recipes and keep track of your favorites
+- 🌙 **Dark Mode** – Switch between light and dark themes
+
+## 🛠️ Tech Stack
+
+| Area | Technology |
+|---|---|
+| **Backend** | Python, FastAPI |
+| **Frontend** | HTML5, CSS3, JavaScript |
+| **Database** | SQLite |
+| **API** | REST API |
+| **Deployment** | Render |
+| **Version Control** | Git & GitHub |
