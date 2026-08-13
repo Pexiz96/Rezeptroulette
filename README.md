@@ -40,3 +40,27 @@ organizing recipes, and creating shopping lists.
 | **API** | REST API |
 | **Deployment** | Render |
 | **Version Control** | Git & GitHub |
+
+## 📸 Application Preview
+
+### Recipe Discovery
+Search, filter, and browse recipes by category, preparation time, difficulty, and more.
+
+<img src="docs/screenshots/recipes.png" width="800" alt="Recipe Discovery">
+
+### Recipe Roulette
+Let the application choose a meal for you based on your preferences.
+
+<img src="docs/screenshots/roulette.png" width="800" alt="Recipe Roulette">
+
+### Meal Planning & Shopping
+
+<p>
+  <img src="docs/screenshots/planner.png" width="49%" alt="Weekly Meal Planner">
+  <img src="docs/screenshots/shopping-list.png" width="49%" alt="Shopping List">
+</p>
+
+### Food Rescue
+Enter ingredients you already have and discover matching recipes.
+
+<img src="docs/screenshots/food-rescue.png" width="800" alt="Food Rescue">
