@@ -17,4 +17,4 @@ organizing recipes, and creating shopping lists.
 
 ## 📸 Preview
 
-![RezeptRoulette Home Page](docs/screenshots/rezeptroulette_home.png)
+![RezeptRoulette Home Page](docs/screenshots/Rezeptroulette_Home.png)
