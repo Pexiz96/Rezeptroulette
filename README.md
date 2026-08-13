@@ -184,7 +184,6 @@ Planned improvements include:
 - [ ] Improve the user experience and responsive design
 - [ ] Expand and improve recipe recommendations
 - [ ] Improve recipe filtering
-- [ ] Add additional meal-planning features
 - [ ] Optimize performance and loading times
 - [ ] Further improve mobile usability
 
