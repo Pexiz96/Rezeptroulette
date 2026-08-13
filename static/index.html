@@ -348,7 +348,23 @@ const deToEn = new Map(Object.entries({
   "Schnell entscheiden. Besser planen.":"Decide quickly. Plan better.",
   "Was darf heute auf den Tisch?":"What's for dinner today?",
   "Entdecke passende Rezepte, lass den Zufall entscheiden oder plane deine ganze Woche mit Einkaufsliste.":"Discover recipes, let chance decide, or plan your entire week with a shopping list.",
-  "Rezept ziehen":"Pick a recipe","Rezepte entdecken":"Discover recipes",
+  "Rezept ziehen":"Pick a recipe",
+  "🎲 Rezept ziehen":"🎲 Pick a recipe",
+  "🍲 Rezepte":"🍲 Recipes",
+  "📅 Plan":"📅 Plan",
+  "🛒 Liste":"🛒 List",
+  "♻️ Rescue":"♻️ Rescue",
+  "👤 Anmelden":"👤 Sign in",
+  "＋ Eigenes Rezept":"＋ Your own recipe",
+  "✨ Automatisch planen":"✨ Auto-plan",
+  "🎲 Rezept-Roulette":"🎲 Recipe Roulette",
+  "👨‍🍳 Kochmodus":"👨‍🍳 Cooking mode",
+  "📅 Einplanen":"📅 Add to plan",
+  "↗ Teilen":"↗ Share",
+  "✓ Gegessen":"✓ Eaten",
+  "🤍 Favorit":"🤍 Favorite",
+  "❤️ Favorit":"❤️ Favorite"
+,"Rezepte entdecken":"Discover recipes",
   "Wochenplan":"Meal plan","Frühstück, Mittag & Abend":"Breakfast, lunch & dinner",
   "Einkaufsliste":"Shopping list","Automatisch aus deinem Plan":"Automatically from your plan",
   "Food Rescue":"Food Rescue","Mit vorhandenen Zutaten kochen":"Cook with ingredients you already have",
@@ -406,7 +422,65 @@ const deToEn = new Map(Object.entries({
   "E-Mail oder Passwort ist falsch":"Email or password is incorrect","Das Passwort muss mindestens 8 Zeichen lang sein":"The password must be at least 8 characters long",
   "Bitte eine gültige E-Mail-Adresse eingeben":"Please enter a valid email address","Aktuelles Passwort ist falsch":"Current password is incorrect",
   "Konto und alle persönlichen Daten wirklich dauerhaft löschen?":"Permanently delete your account and all personal data?",
-  "Auf allen Geräten abmelden?":"Sign out on all devices?","Kompletten Wochenplan leeren?":"Clear the entire meal plan?"
+  "Auf allen Geräten abmelden?":"Sign out on all devices?","Kompletten Wochenplan leeren?":"Clear the entire meal plan?",
+  "Suche":"Search","Suchen":"Search","Zurücksetzen":"Reset","Filter":"Filters","Sortieren":"Sort",
+  "Name":"Name","Beschreibung":"Description","Küche":"Cuisine","Tags":"Tags","Schwierigkeit":"Difficulty",
+  "Minuten":"minutes","Min":"min","Personen":"people","Person":"person","Portion":"serving",
+  "Meine Rezepte":"My recipes","Rezept hinzufügen":"Add recipe","Rezept speichern":"Save recipe","Rezept bearbeiten":"Edit recipe",
+  "Titel":"Title","Bild":"Image","Bild auswählen":"Choose image","Abbrechen":"Cancel","Löschen":"Delete","Speichern":"Save",
+  "Änderungen speichern":"Save changes","Bearbeiten":"Edit","Hinzufügen":"Add","Auswählen":"Select","Fertig":"Done",
+  "Noch keine Rezepte vorhanden.":"No recipes available yet.","Keine Daten vorhanden.":"No data available.",
+  "Lädt ...":"Loading ...","Wird geladen ...":"Loading ...","Bitte warten ...":"Please wait ...",
+  "Erfolgreich gespeichert.":"Saved successfully.","Änderungen gespeichert.":"Changes saved.",
+  "Etwas ist schiefgelaufen.":"Something went wrong.","Unbekannter Fehler":"Unknown error",
+  "Nicht angemeldet":"Not signed in","Du bist nicht angemeldet.":"You are not signed in.",
+  "Bitte melde dich an, um diese Funktion zu nutzen.":"Please sign in to use this feature.",
+  "E-Mail-Adresse":"Email address","Passwort wiederholen":"Repeat password","Passwort bestätigen":"Confirm password",
+  "Profil":"Profile","Konto":"Account","Einstellungen":"Settings","Sicherheit":"Security",
+  "Mitglied seit":"Member since","Persönliche Daten":"Personal data","Sitzungen":"Sessions",
+  "Profilbild":"Profile picture","Profilbild ändern":"Change profile picture","Profilbild löschen":"Delete profile picture",
+  "Aktualisieren":"Update","Bestätigen":"Confirm","Ja":"Yes","Nein":"No",
+  "Willkommen":"Welcome","Willkommen bei Rezeptroulette":"Welcome to Rezeptroulette",
+  "Dein persönlicher Kochassistent":"Your personal cooking assistant",
+  "Was möchtest du kochen?":"What would you like to cook?",
+  "Zufallsrezept":"Random recipe","Neues Rezept":"New recipe","Anderes Rezept":"Another recipe",
+  "Noch einmal drehen":"Spin again","Drehen":"Spin","Los geht's":"Let's go",
+  "Zeit":"Time","Bewertung":"Rating","Kategorie auswählen":"Select category",
+  "Max. Kochzeit":"Max. cooking time","Keine Begrenzung":"No limit",
+  "Unter 15 Minuten":"Under 15 minutes","Unter 30 Minuten":"Under 30 minutes","Unter 45 Minuten":"Under 45 minutes","Unter 60 Minuten":"Under 60 minutes",
+  "15 Minuten":"15 minutes","30 Minuten":"30 minutes","45 Minuten":"45 minutes","60 Minuten":"60 minutes",
+  "Zutat":"Ingredient","Menge":"Amount","Einheit":"Unit","Schritt":"Step",
+  "Zutat hinzufügen":"Add ingredient","Schritt hinzufügen":"Add step",
+  "Zubereitungsschritte":"Instructions","Keine Zutaten vorhanden.":"No ingredients available.",
+  "Keine Zubereitung vorhanden.":"No instructions available.",
+  "Zum Wochenplan hinzufügen":"Add to meal plan","Zur Einkaufsliste hinzufügen":"Add to shopping list",
+  "Als gegessen markieren":"Mark as eaten","Aus Favoriten entfernen":"Remove from favorites",
+  "Zu Favoriten hinzufügen":"Add to favorites",
+  "Heute":"Today","Morgen":"Tomorrow","Diese Woche":"This week",
+  "Wochenübersicht":"Weekly overview","Mahlzeit auswählen":"Select meal",
+  "Plan speichern":"Save plan","Plan wurde gespeichert.":"Meal plan saved.",
+  "Einkauf":"Shopping","Einkäufe":"Shopping","Artikel":"Item","Erledigt":"Done",
+  "Alle abhaken":"Check all","Erledigte entfernen":"Remove completed","Liste leeren":"Clear list",
+  "Noch keine Einträge.":"No entries yet.","Deine Einkaufsliste ist leer.":"Your shopping list is empty.",
+  "Vorhandene Zutaten":"Available ingredients","Deine Vorräte":"Your pantry",
+  "Was ist noch da?":"What do you have left?","Treffer":"Matches","Übereinstimmung":"Match",
+  "Passend":"Matching","Fehlende Zutaten":"Missing ingredients",
+  "Account":"Account","Mein Profil":"My profile","Einstellungen öffnen":"Open settings",
+  "Registrieren":"Register","Registrierung":"Registration","Einloggen":"Sign in","Login":"Sign in",
+  "Ausloggen":"Sign out","E-Mail eingeben":"Enter email","Passwort eingeben":"Enter password",
+  "Benutzername eingeben":"Enter username","Anzeigename eingeben":"Enter display name",
+  "Profilbeschreibung eingeben":"Enter profile description",
+  "Konto wirklich löschen?":"Really delete account?","Diese Aktion kann nicht rückgängig gemacht werden.":"This action cannot be undone.",
+  "Sicherheitsabfrage":"Security check","Alle Geräte":"All devices",
+  "Rezept wurde gespeichert.":"Recipe saved.","Rezept wurde gelöscht.":"Recipe deleted.",
+  "Favorit gespeichert.":"Favorite saved.","Favorit gelöscht.":"Favorite removed.",
+  "Keine Favoriten vorhanden.":"No favorites yet.","Noch keine Bewertungen vorhanden.":"No ratings yet.",
+  "Noch nichts als gegessen markiert.":"Nothing marked as eaten yet.",
+  "Keine Vorräte gespeichert.":"No pantry items saved.","Keine Einträge im Wochenplan.":"No meal-plan entries yet.",
+  "Startseite öffnen":"Open home","Rezepte öffnen":"Open recipes","Roulette öffnen":"Open roulette",
+  "Wochenplan öffnen":"Open meal plan","Einkaufsliste öffnen":"Open shopping list","Food Rescue öffnen":"Open Food Rescue",
+  "Hell":"Light","Dunkel":"Dark","System":"System","Deutsch":"German","Englisch":"English"
+
 }));
 
 function translateUiText(value){
@@ -428,6 +502,35 @@ function translateUiText(value){
   if(!translated){
     const minuteValue=trimmed.match(/^(\d+)\s+Min$/);
     if(minuteValue) translated=`${minuteValue[1]} min`;
+  }
+
+
+  if(!translated){
+    const patterns=[
+      [/^Hallo,\s*(.+)!$/i,(_,name)=>`Hello, ${name}!`],
+      [/^(\d+)\s+Favoriten?$/i,(_,n)=>`${n} ${n==="1"?"favorite":"favorites"}`],
+      [/^(\d+)\s+Bewertungen?$/i,(_,n)=>`${n} ${n==="1"?"rating":"ratings"}`],
+      [/^(\d+)\s+Vorräte?$/i,(_,n)=>`${n} pantry ${n==="1"?"item":"items"}`],
+      [/^(\d+)\s+Rezepte?$/i,(_,n)=>`${n} ${n==="1"?"recipe":"recipes"}`],
+      [/^(\d+)\s+Minuten?$/i,(_,n)=>`${n} minutes`],
+      [/^Noch\s+(\d+)\s+Zeichen$/i,(_,n)=>`${n} characters remaining`],
+      [/^Seite\s+(\d+)\s+von\s+(\d+)$/i,(_,a,b)=>`Page ${a} of ${b}`]
+    ];
+    for(const [rx,fn] of patterns){
+      const m=trimmed.match(rx);
+      if(m){translated=fn(...m);break;}
+    }
+  }
+
+
+  if(!translated){
+    const iconMatch = trimmed.match(/^([^\p{L}\p{N}]*)(.+)$/u);
+    if(iconMatch){
+      const prefix = iconMatch[1] || "";
+      const core = (iconMatch[2] || "").trim();
+      const coreTranslated = deToEn.get(core);
+      if(coreTranslated) translated = prefix + coreTranslated;
+    }
   }
 
   if(!translated) return original;
