@@ -58,6 +58,40 @@
     .danger-btn{background:#fff1f2;color:#be123c;border:1px solid #fecdd3}
     body.dark .danger-btn{background:#3f1621;color:#fecdd3;border-color:#6b2337}
     .icon-btn{width:44px;height:44px;padding:0;display:grid;place-items:center;background:var(--surface);border:1px solid var(--line)}
+    .language-switcher{position:relative}
+    .language-trigger{
+      width:auto;min-width:76px;height:44px;padding:0 12px;display:flex;align-items:center;justify-content:center;
+      gap:8px;border-radius:13px;background:var(--surface);color:var(--text);border:1px solid var(--line);
+      font-weight:850;box-shadow:none
+    }
+    .language-trigger:hover{transform:translateY(-1px);box-shadow:var(--soft)}
+    .language-trigger:focus-visible{outline:3px solid rgba(255,107,53,.22);outline-offset:2px}
+    .language-trigger .lang-flag{width:24px;height:16px;display:inline-flex;align-items:center;justify-content:center;flex:none}
+    .language-trigger .lang-flag svg,.language-option .flag svg{width:100%;height:100%;display:block;border-radius:3px;box-shadow:0 0 0 1px rgba(45,27,18,.10)}
+    .language-option .flag{width:28px;height:19px;display:inline-flex;align-items:center;justify-content:center}
+    .language-trigger .lang-code{font-size:13px;letter-spacing:.04em}
+    .language-trigger .lang-chevron{font-size:11px;color:var(--muted);transition:.18s ease}
+    .language-switcher.open .lang-chevron{transform:rotate(180deg)}
+    .language-menu{
+      position:absolute;right:0;top:calc(100% + 10px);width:210px;padding:8px;background:var(--surface);
+      border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);z-index:2200;
+      opacity:0;visibility:hidden;transform:translateY(-6px) scale(.98);transform-origin:top right;
+      transition:opacity .16s ease,transform .16s ease,visibility .16s ease
+    }
+    .language-switcher.open .language-menu{opacity:1;visibility:visible;transform:none}
+    .language-option{
+      width:100%;display:grid;grid-template-columns:28px 1fr 22px;align-items:center;gap:10px;
+      padding:11px 12px;border-radius:11px;background:transparent;color:var(--text);text-align:left;font-weight:760
+    }
+    .language-option:hover,.language-option:focus-visible{background:var(--surface-2);outline:none}
+    .language-option small{display:block;color:var(--muted);font-weight:650;margin-top:1px}
+    .language-option .check{color:var(--brand);font-weight:950;text-align:right}
+    body.dark .language-menu{background:var(--surface)}
+    @media(max-width:720px){
+      .language-trigger{min-width:52px;padding:0 9px}
+      .language-trigger .lang-code{display:none}
+      .language-menu{right:-48px}
+    }
     .account-btn{display:flex;align-items:center;gap:9px;max-width:220px}
     .avatar-mini{width:30px;height:30px;border-radius:50%;object-fit:cover;background:var(--surface-2);display:grid;place-items:center;flex:none}
     main{max-width:var(--max);margin:auto;padding:32px 18px 120px}
@@ -218,6 +252,32 @@ body:not(.dark) .modal-card{background:#fffaf5}
         <span class="avatar-mini" id="headerAvatar">👤</span>
         <span class="account-label">Anmelden</span>
       </button>
+      <div class="language-switcher" id="languageSwitcher">
+        <button
+          class="language-trigger"
+          id="languageTrigger"
+          type="button"
+          onclick="toggleLanguageMenu(event)"
+          aria-haspopup="menu"
+          aria-expanded="false"
+          aria-label="Sprache auswählen">
+          <span class="lang-flag" id="currentLanguageFlag"><svg viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#ffce00"/><rect width="30" height="13.333" y="0" fill="#dd0000"/><rect width="30" height="6.667" y="0" fill="#000"/></svg></span>
+          <span class="lang-code" id="currentLanguageCode">DE</span>
+          <span class="lang-chevron">⌄</span>
+        </button>
+        <div class="language-menu" id="languageMenu" role="menu" aria-label="Sprache">
+          <button class="language-option" type="button" role="menuitemradio" data-language="de" onclick="setLanguage('de')">
+            <span class="flag"><svg viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#ffce00"/><rect width="30" height="13.333" y="0" fill="#dd0000"/><rect width="30" height="6.667" y="0" fill="#000"/></svg></span>
+            <span><strong>Deutsch</strong><small>German</small></span>
+            <span class="check" data-language-check="de"></span>
+          </button>
+          <button class="language-option" type="button" role="menuitemradio" data-language="en" onclick="setLanguage('en')">
+            <span class="flag"><svg viewBox="0 0 60 30" aria-hidden="true"><rect width="60" height="30" fill="#012169"/><path d="M0 0 60 30M60 0 0 30" stroke="#fff" stroke-width="6"/><path d="M0 0 60 30M60 0 0 30" stroke="#C8102E" stroke-width="2.4"/><path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/><path d="M30 0v30M0 15h60" stroke="#C8102E" stroke-width="6"/></svg></span>
+            <span><strong>English</strong><small>Englisch</small></span>
+            <span class="check" data-language-check="en"></span>
+          </button>
+        </div>
+      </div>
       <button class="icon-btn" onclick="toggleDarkMode()" id="themeButton" aria-label="Darstellung wechseln">🌙</button>
     </div>
   </header>
@@ -277,6 +337,215 @@ body:not(.dark) .modal-card{background:#fffaf5}
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script>
+const UI_LANGUAGE_KEY = "rezeptroulette_language";
+let currentLanguage = localStorage.getItem(UI_LANGUAGE_KEY) || "de";
+if(!["de","en"].includes(currentLanguage)) currentLanguage = "de";
+document.documentElement.lang = currentLanguage;
+
+const deToEn = new Map(Object.entries({
+  "Startseite":"Home","Start":"Home","Rezepte":"Recipes","Roulette":"Roulette","Plan":"Plan","Liste":"List","Rescue":"Rescue",
+  "Anmelden":"Sign in","Darstellung wechseln":"Toggle appearance","Sprache auswählen":"Select language","Sprache":"Language",
+  "Schnell entscheiden. Besser planen.":"Decide quickly. Plan better.",
+  "Was darf heute auf den Tisch?":"What's for dinner today?",
+  "Entdecke passende Rezepte, lass den Zufall entscheiden oder plane deine ganze Woche mit Einkaufsliste.":"Discover recipes, let chance decide, or plan your entire week with a shopping list.",
+  "Rezept ziehen":"Pick a recipe","Rezepte entdecken":"Discover recipes",
+  "Wochenplan":"Meal plan","Frühstück, Mittag & Abend":"Breakfast, lunch & dinner",
+  "Einkaufsliste":"Shopping list","Automatisch aus deinem Plan":"Automatically from your plan",
+  "Food Rescue":"Food Rescue","Mit vorhandenen Zutaten kochen":"Cook with ingredients you already have",
+  "Favoriten":"Favorites","Deine gespeicherten Rezepte":"Your saved recipes",
+  "Heute empfohlen":"Recommended today","Drei Ideen, die heute gut passen könnten.":"Three ideas that could be a great fit today.",
+  "Alle Rezepte →":"All recipes →","Schnell finden":"Quick search","Starte direkt mit einer Kategorie.":"Start directly with a category.",
+  "Alle":"All","Frühstück":"Breakfast","Mittagessen":"Lunch","Mittag":"Lunch","Abendbrot":"Dinner","Abend":"Dinner",
+  "Nudeln":"Pasta","Reis":"Rice","Auflauf":"Casserole","Suppe":"Soup","Vegetarisch":"Vegetarian","Snack":"Snack","Dessert":"Dessert",
+  "Montag":"Monday","Dienstag":"Tuesday","Mittwoch":"Wednesday","Donnerstag":"Thursday","Freitag":"Friday","Samstag":"Saturday","Sonntag":"Sunday",
+  "Mein Bereich":"My account","Profil & Konto":"Profile & account","Noch keine Profilbeschreibung.":"No profile description yet.",
+  "Profil bearbeiten":"Edit profile","Passwort ändern":"Change password","Gegessen":"Eaten","Vorräte":"Pantry items","Bewertungen":"Ratings",
+  "Abmelden":"Sign out","Auf allen Geräten abmelden":"Sign out on all devices","Konto löschen":"Delete account",
+  "Neu dabei":"New here","Konto erstellen":"Create account","Benutzername":"Username","Anzeigename":"Display name","E-Mail":"Email","Passwort":"Password",
+  "Schon registriert? Anmelden":"Already registered? Sign in","Willkommen zurück":"Welcome back",
+  "Benutzername oder E-Mail":"Username or email",
+  "Tipp: Im Passwortfeld reicht Enter – der Anmeldevorgang startet sofort.":"Tip: Press Enter in the password field to sign in immediately.",
+  "Noch kein Konto? Konto erstellen":"No account yet? Create one",
+  "Profilbild (JPG, PNG oder WebP, max. 5 MB)":"Profile picture (JPG, PNG or WebP, max. 5 MB)",
+  "Bild speichern":"Save picture","Entfernen":"Remove","Profilbeschreibung":"Profile description","Profil speichern":"Save profile",
+  "Aktuelles Passwort":"Current password","Neues Passwort":"New password","Passwort speichern":"Save password",
+  "Deine Sammlung":"Your collection","Rezepte, die du dir gemerkt hast.":"Recipes you've saved.","Noch keine Favoriten gespeichert.":"No favorites saved yet.",
+  "Rezeptbibliothek":"Recipe library","Suche nach Namen, Zutaten, Küche oder Tags und kombiniere mehrere Filter.":"Search by name, ingredients, cuisine or tags and combine multiple filters.",
+  "＋ Eigenes Rezept":"＋ Your own recipe","Beliebige Zeit":"Any time","Alle Level":"All levels","Einfach":"Easy","Mittel":"Medium","Schwer":"Hard",
+  "Kochzeit":"Cooking time","Meine Bewertung":"My rating","Nur Favoriten":"Favorites only",
+  "Keine Rezepte gefunden":"No recipes found","Ändere Suchbegriff oder Filter.":"Change the search term or filters.",
+  "Öffnen":"Open","Planen":"Plan","Eigenes":"Mine","Zurück":"Back","Eigenes Rezept löschen":"Delete own recipe",
+  "Rezept":"Recipe","Portionen":"servings","Kochmodus":"Cooking mode","Favorit":"Favorite","Einplanen":"Add to plan","Teilen":"Share",
+  "Quelle":"Source","Zutaten":"Ingredients","Zubereitung":"Instructions","Deine Bewertung":"Your rating",
+  "Rezept-Roulette":"Recipe Roulette","Lass dich überraschen":"Surprise me","Filtere grob – den Rest übernimmt der Zufall.":"Choose a few filters – chance will do the rest.",
+  "Kategorie":"Category","Maximale Kochzeit":"Maximum cooking time","Egal":"Any",
+  "In den letzten 3 Tagen gegessene Rezepte vermeiden":"Avoid recipes eaten in the last 3 days",
+  "Bereit für eine Idee?":"Ready for an idea?","Dein Treffer":"Your pick","Rezept öffnen":"Open recipe","Nochmal":"Again",
+  "Deine Woche":"Your week","Plane Frühstück, Mittag und Abendessen – automatisch oder manuell.":"Plan breakfast, lunch and dinner – automatically or manually.",
+  "Automatisch planen":"Auto-plan","Woche leeren":"Clear week","Gastmodus":"Guest mode",
+  "Melde dich an, damit dein Wochenplan geräteübergreifend gespeichert wird.":"Sign in to sync your meal plan across devices.",
+  "Noch frei":"Empty","Ersetzen":"Replace","Rezept auswählen":"Select recipe","Rezept einplanen":"Add recipe to plan","Tag":"Day","Mahlzeit":"Meal",
+  "Einkaufen mit Plan":"Shop with a plan","Automatisch aus deinem Wochenplan. Dinge, die du zuhause hast, werden ausgeblendet.":"Automatically generated from your meal plan. Items you already have are hidden.",
+  "Habe ich zuhause":"Already at home","Eine Zutat pro Zeile.":"One ingredient per line.","Speichern & neu berechnen":"Save & recalculate",
+  "Liste kopieren":"Copy list","Nichts einzukaufen":"Nothing to buy","Plane zuerst ein paar Rezepte oder prüfe deine Zuhause-Liste.":"Plan a few recipes first or check your at-home list.",
+  "Was hast du noch zuhause?":"What do you still have at home?",
+  "Gib Lebensmittel ein. Wir zeigen zuerst bestehende Rezepte mit möglichst vielen Treffern.":"Enter ingredients. We'll show existing recipes with the most matches first.",
+  "Vorrat speichern":"Save pantry","Passende Rezepte finden":"Find matching recipes","Keine passenden Rezepte gefunden.":"No matching recipes found.",
+  "Keine Anleitung vorhanden.":"No instructions available.","Rezept oder Zutat suchen ...":"Search recipe or ingredient ...",
+  "Mindestens 8 Zeichen":"At least 8 characters","Erzähl kurz etwas über dich ...":"Tell us a little about yourself ...",
+  "z. B. christian":"e.g. christian","z. B. Christian":"e.g. Christian","name@beispiel.de":"name@example.com",
+  "Schließen":"Close","Weiter →":"Next →","← Zurück":"← Back",
+  "Konto erstellt.":"Account created.","Willkommen zurück.":"Welcome back.","Abgemeldet.":"Signed out.","Alle Sitzungen beendet.":"All sessions ended.",
+  "Profil gespeichert.":"Profile saved.","Bitte ein Bild auswählen.":"Please select an image.","Upload fehlgeschlagen":"Upload failed",
+  "Profilbild gespeichert.":"Profile picture saved.","Profilbild entfernt.":"Profile picture removed.","Passwort geändert.":"Password changed.","Konto gelöscht.":"Account deleted.",
+  "Rezepte konnten nicht geladen werden.":"Recipes could not be loaded.","Rezept nicht gefunden.":"Recipe not found.","Bewertung gespeichert.":"Rating saved.",
+  "Als Favorit gespeichert.":"Saved as favorite.","Favorit entfernt.":"Favorite removed.","Als gegessen markiert.":"Marked as eaten.",
+  "Eingeplant.":"Added to meal plan.","Woche geplant.":"Week planned.","Liste kopiert.":"List copied.","Kopieren nicht möglich.":"Copying is not available.",
+  "Vorrat gespeichert.":"Pantry saved.","Bitte Zutaten eingeben.":"Please enter ingredients.",
+  "Bitte zuerst anmelden":"Please sign in first","Für diese E-Mail gibt es bereits ein Konto":"An account already exists for this email address",
+  "E-Mail oder Passwort ist falsch":"Email or password is incorrect","Das Passwort muss mindestens 8 Zeichen lang sein":"The password must be at least 8 characters long",
+  "Bitte eine gültige E-Mail-Adresse eingeben":"Please enter a valid email address","Aktuelles Passwort ist falsch":"Current password is incorrect",
+  "Konto und alle persönlichen Daten wirklich dauerhaft löschen?":"Permanently delete your account and all personal data?",
+  "Auf allen Geräten abmelden?":"Sign out on all devices?","Kompletten Wochenplan leeren?":"Clear the entire meal plan?"
+}));
+
+function translateUiText(value){
+  if(currentLanguage!=="en") return value;
+  const original=String(value??"");
+  const trimmed=original.trim();
+  if(!trimmed) return original;
+
+  let translated=deToEn.get(trimmed);
+
+  if(!translated){
+    const recipeCount=trimmed.match(/^(\d+)\s+Rezepte?\s+gefunden$/);
+    if(recipeCount) translated=`${recipeCount[1]} ${recipeCount[1]==="1"?"recipe":"recipes"} found`;
+  }
+  if(!translated){
+    const errorCode=trimmed.match(/^Fehler\s+(\d+)$/);
+    if(errorCode) translated=`Error ${errorCode[1]}`;
+  }
+  if(!translated){
+    const minuteValue=trimmed.match(/^(\d+)\s+Min$/);
+    if(minuteValue) translated=`${minuteValue[1]} min`;
+  }
+
+  if(!translated) return original;
+  const leading=original.match(/^\s*/)?.[0]||"";
+  const trailing=original.match(/\s*$/)?.[0]||"";
+  return leading+translated+trailing;
+}
+
+function translateElement(root=document.body){
+  if(currentLanguage!=="en"||!root) return;
+
+  const translateAttributes=el=>{
+    if(!(el instanceof Element)) return;
+    for(const attr of ["placeholder","aria-label","title"]){
+      if(el.hasAttribute(attr)){
+        const oldValue=el.getAttribute(attr);
+        const newValue=translateUiText(oldValue);
+        if(newValue!==oldValue) el.setAttribute(attr,newValue);
+      }
+    }
+  };
+
+  if(root.nodeType===Node.TEXT_NODE){
+    const p=root.parentElement;
+    if(p&&!["SCRIPT","STYLE"].includes(p.tagName)){
+      const next=translateUiText(root.nodeValue);
+      if(next!==root.nodeValue) root.nodeValue=next;
+    }
+    return;
+  }
+
+  if(root instanceof Element) translateAttributes(root);
+  const walker=document.createTreeWalker(root,NodeFilter.SHOW_ELEMENT|NodeFilter.SHOW_TEXT);
+  let node;
+  while((node=walker.nextNode())){
+    if(node.nodeType===Node.TEXT_NODE){
+      const p=node.parentElement;
+      if(!p||["SCRIPT","STYLE"].includes(p.tagName)) continue;
+      const next=translateUiText(node.nodeValue);
+      if(next!==node.nodeValue) node.nodeValue=next;
+    }else{
+      translateAttributes(node);
+    }
+  }
+}
+
+const FLAG_SVG = {
+  de: `<svg viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#ffce00"/><rect width="30" height="13.333" y="0" fill="#dd0000"/><rect width="30" height="6.667" y="0" fill="#000"/></svg>`,
+  en: `<svg viewBox="0 0 60 30" aria-hidden="true"><rect width="60" height="30" fill="#012169"/><path d="M0 0 60 30M60 0 0 30" stroke="#fff" stroke-width="6"/><path d="M0 0 60 30M60 0 0 30" stroke="#C8102E" stroke-width="2.4"/><path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/><path d="M30 0v30M0 15h60" stroke="#C8102E" stroke-width="6"/></svg>`
+};
+
+function updateLanguageSwitcher(){
+  const flag=document.getElementById("currentLanguageFlag");
+  const code=document.getElementById("currentLanguageCode");
+  if(flag) flag.innerHTML=FLAG_SVG[currentLanguage]||FLAG_SVG.de;
+  if(code) code.textContent=currentLanguage==="de"?"DE":"EN";
+
+  document.querySelectorAll(".language-option").forEach(btn=>{
+    const active=btn.dataset.language===currentLanguage;
+    btn.setAttribute("aria-checked",active?"true":"false");
+  });
+  document.querySelectorAll("[data-language-check]").forEach(el=>{
+    el.textContent=el.dataset.languageCheck===currentLanguage?"✓":"";
+  });
+}
+
+function toggleLanguageMenu(event){
+  event?.stopPropagation();
+  const switcher=document.getElementById("languageSwitcher");
+  const trigger=document.getElementById("languageTrigger");
+  if(!switcher||!trigger) return;
+  const open=!switcher.classList.contains("open");
+  switcher.classList.toggle("open",open);
+  trigger.setAttribute("aria-expanded",open?"true":"false");
+}
+
+function closeLanguageMenu(){
+  const switcher=document.getElementById("languageSwitcher");
+  const trigger=document.getElementById("languageTrigger");
+  switcher?.classList.remove("open");
+  trigger?.setAttribute("aria-expanded","false");
+}
+
+function setLanguage(language){
+  if(!["de","en"].includes(language)) return;
+  localStorage.setItem(UI_LANGUAGE_KEY,language);
+  currentLanguage=language;
+  document.documentElement.lang=language;
+  closeLanguageMenu();
+  location.reload();
+}
+
+document.addEventListener("click",event=>{
+  const switcher=document.getElementById("languageSwitcher");
+  if(switcher&&!switcher.contains(event.target)) closeLanguageMenu();
+});
+
+document.addEventListener("keydown",event=>{
+  if(event.key==="Escape") closeLanguageMenu();
+});
+
+const languageObserver=new MutationObserver(mutations=>{
+  if(currentLanguage!=="en") return;
+  for(const mutation of mutations){
+    for(const node of mutation.addedNodes) translateElement(node);
+    if(mutation.type==="characterData") translateElement(mutation.target);
+  }
+});
+
+document.addEventListener("DOMContentLoaded",()=>{
+  updateLanguageSwitcher();
+  translateElement(document.body);
+  languageObserver.observe(document.body,{childList:true,subtree:true,characterData:true});
+});
+
+const nativeConfirm=window.confirm.bind(window);
+window.confirm=message=>nativeConfirm(translateUiText(message));
+
 const state = {
   recipes: [], user: null, favorites: [], ratings: {}, pantry: [], atHome: [], eaten: [],
   recipeFilter: "Alle", rouletteFilter: "Alle", currentView: "home", recent: JSON.parse(localStorage.getItem("recentRecipes") || "[]"),
@@ -297,7 +566,7 @@ function skeleton(){return `<div class="recipe-grid"><div class="skeleton"></div
 async function requestJson(url,options={}){
   const res=await fetch(url,{...options,headers:{...(options.body?{"Content-Type":"application/json"}:{}),...(options.headers||{})}});
   let data=null;try{data=await res.json()}catch(_){}
-  if(!res.ok)throw new Error(data?.detail||data?.error||`Fehler ${res.status}`);
+  if(!res.ok)throw new Error(translateUiText(data?.detail||data?.error||`Fehler ${res.status}`));
   return data;
 }
 
