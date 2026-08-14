@@ -35,6 +35,7 @@ It combines recipe discovery, random meal suggestions, weekly meal planning, sho
 - 🛒 **Smart Shopping List** – Generate a shopping list based on your planned meals
 - ♻️ **Food Rescue** – Find recipes based on ingredients you already have at home
 - ❤️ **Favorites** – Save your favorite recipes for quick access
+- - 🌐 **Multilingual Support** – Switch between German and English
 - ⭐ **Recipe Ratings** – Rate recipes and keep track of meals you enjoy
 - 🌙 **Dark Mode** – Switch between light and dark themes
 
