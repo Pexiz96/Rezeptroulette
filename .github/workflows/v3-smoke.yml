@@ -1,0 +1,17 @@
+name: V3 Smoke
+on:
+  push:
+    branches: [feature-smart-profiles-v3]
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python -m py_compile api.py database.py payload_loader.py
+      - run: python tests/v3_introspection.py
