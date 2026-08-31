@@ -25,9 +25,11 @@ class Database(_OriginalDatabase):
         try:
             from extra_recipes import ensure_extra_recipes
             from extra_recipes_batch2 import ensure_extra_recipes_batch2
+            from sync_batch2_images import sync_batch2_recipe_images
 
             ensure_extra_recipes(self.engine)
             ensure_extra_recipes_batch2(self.engine)
+            sync_batch2_recipe_images(self.engine)
         except Exception as exc:
             # Bei initialize=False können die Tabellen beim ersten Import noch
             # fehlen. Der reguläre Startup-Lauf mit initialize=True ergänzt die
