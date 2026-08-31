@@ -13,18 +13,23 @@ exec_gzip_base64_payload(
     "database.py",
 )
 
-# Zusätzliche kuratierte Rezepte werden idempotent ergänzt. Die Funktionen
-# prüfen jeweils den Rezeptnamen und verändern bereits vorhandene Rezepte nicht.
-try:
-    from extra_recipes import ensure_extra_recipes
+# Zusätzliche kuratierte Rezepte werden beim Initialisieren der Datenbank
+# idempotent ergänzt. Dadurch funktioniert das sowohl lokal als auch auf
+# Render/PostgreSQL und bereits vorhandene Rezepte werden nicht dupliziert.
+_OriginalDatabase = Database
 
-    ensure_extra_recipes(engine)
-except Exception as exc:
-    print(f"[Rezeptroulette] Extra-Rezepte Batch 1 konnten nicht ergänzt werden: {exc}")
 
-try:
-    from extra_recipes_batch2 import ensure_extra_recipes_batch2
+class Database(_OriginalDatabase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            from extra_recipes import ensure_extra_recipes
+            from extra_recipes_batch2 import ensure_extra_recipes_batch2
 
-    ensure_extra_recipes_batch2(engine)
-except Exception as exc:
-    print(f"[Rezeptroulette] Extra-Rezepte Batch 2 konnten nicht ergänzt werden: {exc}")
+            ensure_extra_recipes(self.engine)
+            ensure_extra_recipes_batch2(self.engine)
+        except Exception as exc:
+            # Bei initialize=False können die Tabellen beim ersten Import noch
+            # fehlen. Der reguläre Startup-Lauf mit initialize=True ergänzt die
+            # Rezepte anschließend automatisch.
+            print(f"[Rezeptroulette] Zusatzrezepte konnten noch nicht ergänzt werden: {exc}")
