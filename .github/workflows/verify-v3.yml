@@ -1,0 +1,89 @@
+name: Verify Rezeptroulette v3
+
+on:
+  push:
+    branches:
+      - feature-smart-profiles-v3
+      - feature-user-accounts
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Decode and compile upgrade payloads
+        run: |
+          python - <<'PY'
+          import base64, gzip
+          from pathlib import Path
+
+          root = Path('.')
+          api_b64 = ''.join((root / '.github/upgrade_payload/api.py.gz.b64').read_text().split())
+          db_b64 = ''.join(
+              ''.join((root / f'.github/upgrade_payload/database.{i:02d}').read_text().split())
+              for i in range(4)
+          )
+          api_source = gzip.decompress(base64.b64decode(api_b64, validate=True)).decode('utf-8')
+          db_source = gzip.decompress(base64.b64decode(db_b64, validate=True)).decode('utf-8')
+          compile(api_source, 'api.py', 'exec')
+          compile(db_source, 'database.py', 'exec')
+          print(f'api.py payload: {len(api_source)} chars')
+          print(f'database.py payload: {len(db_source)} chars')
+          PY
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Backend smoke test
+        env:
+          DATABASE_URL: sqlite:////tmp/rezeptroulette-ci.sqlite3
+          ENABLE_API_DOCS: 'true'
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          db_file = Path('/tmp/rezeptroulette-ci.sqlite3')
+          if db_file.exists():
+              db_file.unlink()
+
+          import api
+          from fastapi.testclient import TestClient
+
+          with TestClient(api.app) as client:
+              response = client.get('/health')
+              assert response.status_code == 200, response.text
+              payload = response.json()
+              assert payload.get('ok') is True, payload
+
+              routes = sorted({getattr(route, 'path', '') for route in api.app.routes})
+              print('ROUTES_START')
+              for route in routes:
+                  if route:
+                      print(route)
+              print('ROUTES_END')
+
+              required_route_groups = [
+                  ('allergy/profile', ['/allerg', '/preferences', '/profile']),
+                  ('shopping', ['/shopping']),
+                  ('pantry', ['/pantry']),
+                  ('weekly plan', ['/weekly']),
+                  ('roulette', ['/roulette']),
+              ]
+              lower_routes = [r.lower() for r in routes]
+              for label, needles in required_route_groups:
+                  assert any(any(n in r for n in needles) for r in lower_routes), f'Missing route group: {label}'
+
+          print('Backend smoke test passed')
+          PY
