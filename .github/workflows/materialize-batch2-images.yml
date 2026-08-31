@@ -23,7 +23,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install image helpers
-        run: pip install requests pillow
+        run: pip install requests pillow sqlalchemy
 
       - name: Download and normalize recipe images
         run: |
@@ -78,11 +78,6 @@ jobs:
               image.save(target, 'JPEG', quality=82, optimize=True)
 
               new = f'/bilder/curated/{filename}'
-              seed_text = seed_text.replace(
-                  f'"bild": {old!r}'.replace("'", '"'),
-                  f'"bild": "{new}"',
-              )
-              # The source uses normal JSON-style double quoted strings.
               seed_text = seed_text.replace(f'"bild": "{old}"', f'"bild": "{new}"')
               print(f'{name}: {old} -> {new} ({target.stat().st_size} bytes)')
 
