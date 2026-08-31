@@ -2,23 +2,15 @@ from pathlib import Path
 import sys, json
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-
 import api
 
-print('V3_ROUTES')
-for route in api.app.routes:
-    path = getattr(route, 'path', '')
-    if path and any(key in path for key in ['/profile','/pantry','/food-rescue','/household','/wochenplan','/einkaufsliste','/recipe-notes','/auth/sessions','/auth/export','/roulette','/rezepte']):
-        print(','.join(sorted(getattr(route, 'methods', []) or [])), path, getattr(route, 'name', ''))
-
-print('V3_MODELS')
-for name in ['FoodProfilePayload','PantryItemPayload','PantryV2Payload','HouseholdPayload','JoinHouseholdPayload','HouseholdProfilePayload','RecipeNotePayload','ShoppingCheckPayload','WeeklyPlanBulk']:
-    cls = getattr(api, name, None)
-    if cls is not None and hasattr(cls, 'model_json_schema'):
-        print(name, json.dumps(cls.model_json_schema(), ensure_ascii=False, sort_keys=True))
-
-print('OPENAPI_PATHS')
 spec = api.app.openapi()
+print('MODELS')
+for name, schema in sorted(spec.get('components', {}).get('schemas', {}).items()):
+    if any(k in name.lower() for k in ['household','profile','register','login','pantry','recipe','rating','items']):
+        print(name, json.dumps(schema, ensure_ascii=False, sort_keys=True))
+
+print('ROUTES')
 for path, methods in spec.get('paths', {}).items():
-    if any(key in path for key in ['/profile','/pantry','/food-rescue','/household','/wochenplan','/einkaufsliste','/recipe-notes','/auth/sessions','/auth/export','/roulette']):
+    if any(k in path for k in ['/auth','/household','/favorites','/ratings','/eaten','/rezepte/{recipe_id}/scale']):
         print(path, json.dumps(methods, ensure_ascii=False, sort_keys=True))
