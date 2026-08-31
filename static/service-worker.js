@@ -1,4 +1,4 @@
-const CACHE="rezeptroulette-v3-1";
+const CACHE="rezeptroulette-v3-2";
 const SHELL=[
   "/",
   "/static/index-v3.html",
@@ -29,6 +29,22 @@ self.addEventListener("fetch",event=>{
   if(request.method!=="GET")return;
   const url=new URL(request.url);
   if(url.origin!==self.location.origin)return;
+
+  // Compatibility fix for the legacy frontend: imageUrl() currently prefixes
+  // every non-http image with /static/images/. New curated recipes already use
+  // /generated-images/<file>.jpg, which otherwise becomes the invalid path
+  // /static/images//generated-images/<file>.jpg. Rewrite that request to the
+  // real FastAPI image endpoint until the legacy frontend is retired.
+  if(
+    url.pathname.startsWith("/static/images//generated-images/") ||
+    url.pathname.startsWith("/static/images/generated-images/")
+  ){
+    const marker="generated-images/";
+    const filename=url.pathname.slice(url.pathname.indexOf(marker)+marker.length);
+    const corrected=new URL(`/generated-images/${filename}`,self.location.origin);
+    event.respondWith(fetch(corrected.toString(),{credentials:"same-origin"}));
+    return;
+  }
 
   // Personalized/account data is deliberately never cached. This prevents one
   // user's allergies, pantry, household or account data from being served stale
