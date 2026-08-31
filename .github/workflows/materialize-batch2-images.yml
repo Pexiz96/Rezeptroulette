@@ -1,0 +1,116 @@
+name: Materialize curated recipe images
+
+on:
+  push:
+    branches:
+      - feature-user-accounts
+    paths:
+      - .github/workflows/materialize-batch2-images.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install image helpers
+        run: pip install requests pillow
+
+      - name: Download and normalize recipe images
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import base64
+          import io
+          import re
+          import unicodedata
+          from pathlib import Path
+
+          import requests
+          from PIL import Image
+
+          from extra_recipes_batch2 import EXTRA_RECIPES_BATCH2
+
+          root = Path('.')
+          out_dir = root / 'bilder' / 'curated'
+          out_dir.mkdir(parents=True, exist_ok=True)
+          seed_path = root / 'extra_recipes_batch2.py'
+          seed_text = seed_path.read_text(encoding='utf-8')
+
+          def slugify(value: str) -> str:
+              value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+              value = re.sub(r'[^a-zA-Z0-9]+', '_', value).strip('_').lower()
+              return value
+
+          session = requests.Session()
+          session.headers.update({'User-Agent': 'Mozilla/5.0 Rezeptroulette/3.0'})
+
+          for recipe in EXTRA_RECIPES_BATCH2:
+              name = recipe['name']
+              old = recipe.get('bild') or ''
+              filename = f"{slugify(name)}.jpg"
+              target = out_dir / filename
+
+              if old.startswith('/generated-images/'):
+                  source = root / '.github' / 'generated_images' / f"{Path(old).name}.b64"
+                  if not source.is_file():
+                      raise RuntimeError(f'Generated source missing for {name}: {source}')
+                  raw = base64.b64decode(''.join(source.read_text(encoding='ascii').split()), validate=True)
+              elif old.startswith('http://') or old.startswith('https://'):
+                  response = session.get(old, timeout=30, allow_redirects=True)
+                  response.raise_for_status()
+                  raw = response.content
+              else:
+                  raise RuntimeError(f'Unsupported image source for {name}: {old}')
+
+              image = Image.open(io.BytesIO(raw)).convert('RGB')
+              image.thumbnail((1200, 1200))
+              image.save(target, 'JPEG', quality=82, optimize=True)
+
+              new = f'/bilder/curated/{filename}'
+              seed_text = seed_text.replace(
+                  f'"bild": {old!r}'.replace("'", '"'),
+                  f'"bild": "{new}"',
+              )
+              # The source uses normal JSON-style double quoted strings.
+              seed_text = seed_text.replace(f'"bild": "{old}"', f'"bild": "{new}"')
+              print(f'{name}: {old} -> {new} ({target.stat().st_size} bytes)')
+
+          seed_path.write_text(seed_text, encoding='utf-8')
+          PY
+
+      - name: Verify all Batch-2 recipes now use local images
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from extra_recipes_batch2 import EXTRA_RECIPES_BATCH2
+          assert EXTRA_RECIPES_BATCH2
+          for recipe in EXTRA_RECIPES_BATCH2:
+              image = recipe['bild']
+              assert image.startswith('/bilder/curated/'), (recipe['name'], image)
+              file = Path(image.lstrip('/'))
+              assert file.is_file() and file.stat().st_size > 5000, (recipe['name'], file)
+          print(f'Verified {len(EXTRA_RECIPES_BATCH2)} local recipe images')
+          PY
+
+      - name: Commit local recipe images
+        run: |
+          git config user.name "Pexiz96"
+          git config user.email "c.thiede@icloud.com"
+          git add bilder/curated extra_recipes_batch2.py
+          if git diff --cached --quiet; then
+            echo "No image changes to commit"
+          else
+            git commit -m "Add local images for curated recipe batch 2 [skip ci]"
+            git push origin HEAD:feature-user-accounts
+          fi
