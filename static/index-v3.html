@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#ff6b35">
+  <meta name="description" content="Rezeptroulette – persönliche Rezeptideen, Wochenplanung, Vorräte und intelligente Einkaufsliste.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Rezeptroulette">
+  <title>Rezeptroulette</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="apple-touch-icon" href="/static/images/Rezeptroulette.png">
+  <link rel="stylesheet" href="/static/v3.css">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="topbar-inner">
+        <button class="brand" data-action="home" aria-label="Rezeptroulette Startseite">
+          <img src="/static/images/Rezeptroulette.png" alt="" onerror="this.style.display='none'">
+          <span>Rezeptroulette</span>
+        </button>
+        <nav class="desktop-nav" aria-label="Hauptnavigation">
+          <button data-nav="home">Start</button>
+          <button data-nav="recipes">Rezepte</button>
+          <button data-nav="roulette">Roulette</button>
+          <button data-nav="plan">Wochenplan</button>
+          <button data-nav="shopping">Einkauf</button>
+          <button data-nav="pantry">Vorrat</button>
+          <button data-nav="rescue">Food Rescue</button>
+        </nav>
+        <div class="top-actions">
+          <button id="installBtn" class="icon-btn hidden" title="App installieren">↧</button>
+          <button id="languageBtn" class="icon-btn" title="Sprache">DE</button>
+          <button id="themeBtn" class="icon-btn" title="Darstellung">🌙</button>
+          <button id="accountBtn" class="account-btn">Anmelden</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="main" class="main" tabindex="-1"></main>
+
+    <nav class="bottom-nav" aria-label="Mobile Navigation">
+      <button data-nav="home"><span>⌂</span><small>Start</small></button>
+      <button data-nav="recipes"><span>🍲</span><small>Rezepte</small></button>
+      <button data-nav="roulette"><span>🎲</span><small>Roulette</small></button>
+      <button data-nav="plan"><span>📅</span><small>Plan</small></button>
+      <button data-nav="shopping"><span>🛒</span><small>Liste</small></button>
+    </nav>
+  </div>
+
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <button id="modalClose" class="modal-close" aria-label="Schließen">✕</button>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <div id="cookMode" class="cook-mode hidden" role="dialog" aria-modal="true">
+    <div class="cook-inner">
+      <div class="cook-head"><strong id="cookTitle">Kochmodus</strong><button id="cookClose" class="icon-btn">✕</button></div>
+      <div id="cookProgress" class="hint"></div>
+      <div id="cookStep" class="cook-step"></div>
+      <div class="button-row center"><button id="cookPrev" class="secondary">← Zurück</button><button id="cookNext" class="primary">Weiter →</button></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/static/v3.js" defer></script>
+</body>
+</html>
