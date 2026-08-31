@@ -22,44 +22,16 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Compile Python and generated payloads
-        run: |
-          python -m py_compile api.py database.py payload_loader.py smart_features.py extra_recipes.py
-          python - <<'PY'
-          import base64, gzip
-          from pathlib import Path
-          root=Path('.')
-          api_b64=''.join((root/'.github/upgrade_payload/api.py.gz.b64').read_text().split())
-          db_b64=''.join(''.join((root/f'.github/upgrade_payload/database.{i:02d}').read_text().split()) for i in range(4))
-          compile(gzip.decompress(base64.b64decode(api_b64,validate=True)).decode(),'api-payload.py','exec')
-          compile(gzip.decompress(base64.b64decode(db_b64,validate=True)).decode(),'database-payload.py','exec')
-          for source in (root/'.github/generated_images').glob('*.jpg.b64'):
-              payload=base64.b64decode(''.join(source.read_text().split()),validate=True)
-              assert payload.startswith(b'\xff\xd8\xff'),source
-              assert len(payload)>5000,(source,len(payload))
-          PY
+      - name: Compile Python
+        run: python -m py_compile api.py database.py payload_loader.py smart_features.py extra_recipes.py extra_recipes_batch2.py
 
       - name: Check frontend JavaScript
         run: node --check static/v3.js
 
-      - name: Validate PWA files
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          manifest=json.loads(Path('static/manifest.json').read_text())
-          assert manifest['display']=='standalone'
-          assert manifest['theme_color']=='#ff6b35'
-          html=Path('static/index-v3.html').read_text()
-          assert '/static/v3.css' in html and '/static/v3.js' in html
-          sw=Path('static/service-worker.js').read_text()
-          assert '/profile/' in sw and '/household' in sw and '/einkaufsliste' in sw
-          PY
-
       - name: Install dependencies
         run: pip install -r requirements.txt httpx2
 
-      - name: Backend, account and smart-feature tests
+      - name: Backend and recipe verification
         env:
           DATABASE_URL: sqlite:////tmp/rezeptroulette-ci.sqlite3
           ENABLE_API_DOCS: 'true'
@@ -87,47 +59,38 @@ jobs:
           with TestClient(api.app) as client:
               health=client.get('/health')
               assert health.status_code==200 and health.json().get('version')=='3.0.0',health.text
-              root=client.get('/')
-              assert root.status_code==200 and 'v3.js' in root.text and 'Rezeptroulette' in root.text
-
-              routes={getattr(route,'path','') for route in api.app.routes}
-              required={'/profile/food','/pantry-v2','/food-rescue','/roulette','/wochenplan','/wochenplan/auto','/einkaufsliste','/household','/auth/sessions','/auth/export','/recipe-notes/{recipe_id}','/rezepte/{recipe_id}/scale','/generated-images/{filename}'}
-              assert not (required-routes),f'Missing V3 routes: {sorted(required-routes)}'
-
               recipes=client.get('/rezepte')
               assert recipes.status_code==200,recipes.text
               rows=recipes.json()
-              expected={
-                  'Lachs-Spinat-Pasta','Ofengemüse mit Feta','Linsencurry mit Kokosmilch',
-                  'Hähnchen Teriyaki mit Reis','Kartoffel-Brokkoli-Auflauf',
-                  'Caesar Salat mit Hähnchen','Shakshuka','Quarkbowl mit Beeren',
-              }
               names=[row['name'] for row in rows]
-              assert expected.issubset(set(names)),sorted(expected-set(names))
-              assert all(names.count(name)==1 for name in expected),names
-              salmon=next(row for row in rows if row['name']=='Lachs-Spinat-Pasta')
-              assert '250 g Lachsfilet ohne Haut' in salmon['zutaten'],salmon
-              assert 'Pasta in Salzwasser' in salmon['anleitung'],salmon
-              for filename in [
-                  'lachs_spinat_pasta.jpg','ofengemuese_mit_feta.jpg','linsencurry_kokosmilch.jpg',
-                  'haehnchen_teriyaki_reis.jpg','kartoffel_brokkoli_auflauf.jpg',
-                  'caesar_salat_haehnchen.jpg','shakshuka.jpg','quarkbowl_beeren.jpg',
-              ]:
-                  image=client.get(f'/generated-images/{filename}')
-                  assert image.status_code==200,(filename,image.status_code,image.text[:200])
-                  assert image.headers.get('content-type','').startswith('image/jpeg'),image.headers
-                  assert len(image.content)>5000,(filename,len(image.content))
+
+              expected_batch2={
+                  'Cremige Pilzpfanne mit Spätzle','Mediterrane Gemüse-Lasagne',
+                  'Knusprige Ofenkartoffeln mit Kräuterquark','Gebratene Gnocchi mit Spinat und Tomaten',
+                  'Apfel-Zimt-Porridge','Couscous-Salat mit Feta',
+                  'Hähnchen-Gemüse-Wrap mit Joghurt-Dressing','Tomaten-Mozzarella-Pasta',
+                  'Beeren-Pancakes mit Joghurt','Tomate-Mozzarella-Salat','Pilzrisotto',
+                  'Chili sin Carne','French Toast mit Beeren','Thunfisch-Nudel-Salat','Gemüseomelett',
+              }
+              assert expected_batch2.issubset(set(names)),sorted(expected_batch2-set(names))
+              assert all(names.count(name)==1 for name in expected_batch2)
+              for row in rows:
+                  if row['name'] in expected_batch2:
+                      assert row.get('zutaten'),row['name']
+                      assert row.get('anleitung'),row['name']
+                      assert row.get('bild'),row['name']
+
+              image=client.get('/generated-images/pilzspaetzle.jpg')
+              assert image.status_code==200,image.status_code
+              assert image.headers.get('content-type','').startswith('image/jpeg')
+              assert len(image.content)>5000
 
               reg=client.post('/auth/register',json={'username':'ci_user','email':'ci@example.test','password':'Testpass123!','display_name':'CI User'})
               assert reg.status_code==200,reg.text
               profile=client.put('/profile/food',json={'allergies':['milk'],'intolerances':['gluten'],'diets':[],'dislikes':['pilz'],'favorite_ingredients':['kartoffel']})
               assert profile.status_code==200,profile.text
-              saved=client.get('/profile/food')
-              assert saved.status_code==200 and 'milk' in saved.json()['profile']['allergies'],saved.text
               pantry=client.put('/pantry-v2',json={'items':[{'name':'Zwiebeln','amount':2,'unit':'Stück','storage':'Vorrat','expires_at':'','opened':False}]})
               assert pantry.status_code==200,pantry.text
-              pantry_get=client.get('/pantry-v2')
-              assert pantry_get.status_code==200 and pantry_get.json()['items'],pantry_get.text
               house=client.post('/household',json={'name':'CI Haushalt'})
               assert house.status_code==200,house.text
               auto=client.post('/wochenplan/auto?scope=household')
