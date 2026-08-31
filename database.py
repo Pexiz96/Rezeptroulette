@@ -12,3 +12,14 @@ exec_gzip_base64_payload(
     ],
     "database.py",
 )
+
+# Zusätzliche kuratierte Rezepte werden idempotent ergänzt. Die Funktion
+# prüft den Rezeptnamen und verändert bereits vorhandene Rezepte nicht.
+try:
+    from extra_recipes import ensure_extra_recipes
+
+    ensure_extra_recipes(engine)
+except Exception as exc:
+    # Die App soll auch dann starten, wenn beim optionalen Seed ein einzelner
+    # Datenbankfehler auftritt; der Fehler bleibt im Log sichtbar.
+    print(f"[Rezeptroulette] Extra-Rezepte konnten nicht ergänzt werden: {exc}")
