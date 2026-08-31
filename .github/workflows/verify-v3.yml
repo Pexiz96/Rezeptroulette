@@ -38,25 +38,38 @@ jobs:
           db_source = gzip.decompress(base64.b64decode(db_b64, validate=True)).decode('utf-8')
           compile(api_source, 'api.py', 'exec')
           compile(db_source, 'database.py', 'exec')
+          compile(Path('smart_features.py').read_text(), 'smart_features.py', 'exec')
           print(f'api.py payload: {len(api_source)} chars')
           print(f'database.py payload: {len(db_source)} chars')
           PY
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt httpx2
 
-      - name: Backend smoke test
+      - name: Backend and smart-feature smoke test
         env:
           DATABASE_URL: sqlite:////tmp/rezeptroulette-ci.sqlite3
           ENABLE_API_DOCS: 'true'
         run: |
           python - <<'PY'
-          import os
           from pathlib import Path
 
           db_file = Path('/tmp/rezeptroulette-ci.sqlite3')
           if db_file.exists():
               db_file.unlink()
+
+          from smart_features import merge_ingredients, recipe_is_safe, parse_ingredient
+          merged = merge_ingredients([
+              {'portionen': 2, 'zutaten': ['1 kleine Zwiebel', '250 g Möhren']},
+              {'portionen': 2, 'zutaten': ['1 Zwiebel', '500 g Karotten', '2 Frühlingszwiebeln']},
+          ])
+          by_food = {row['food']: row for row in merged}
+          assert by_food['zwiebel']['display'] == '2 Zwiebeln', by_food
+          assert by_food['karotte']['display'] == '750 g Karotten', by_food
+          assert 'frühlingszwiebel' in by_food and by_food['frühlingszwiebel']['display'] == '2 Frühlingszwiebeln', by_food
+          assert parse_ingredient('1 kleine Zwiebel')['food'] == 'zwiebel'
+          safe, conflicts = recipe_is_safe({'zutaten': ['200 ml Milch']}, {'allergies': ['milk']})
+          assert safe is False and 'milk' in conflicts['allergy_conflicts'], conflicts
 
           import api
           from fastapi.testclient import TestClient
@@ -65,25 +78,16 @@ jobs:
               response = client.get('/health')
               assert response.status_code == 200, response.text
               payload = response.json()
-              assert payload.get('ok') is True, payload
+              assert payload.get('ok') is True and payload.get('version') == '3.0.0', payload
 
-              routes = sorted({getattr(route, 'path', '') for route in api.app.routes})
-              print('ROUTES_START')
-              for route in routes:
-                  if route:
-                      print(route)
-              print('ROUTES_END')
+              routes = {getattr(route, 'path', '') for route in api.app.routes}
+              required = {
+                  '/profile/food', '/pantry-v2', '/food-rescue', '/roulette',
+                  '/wochenplan', '/wochenplan/auto', '/einkaufsliste',
+                  '/household', '/auth/sessions', '/auth/export',
+              }
+              missing = sorted(required - routes)
+              assert not missing, f'Missing V3 routes: {missing}'
 
-              required_route_groups = [
-                  ('allergy/profile', ['/allerg', '/preferences', '/profile']),
-                  ('shopping', ['/shopping']),
-                  ('pantry', ['/pantry']),
-                  ('weekly plan', ['/weekly']),
-                  ('roulette', ['/roulette']),
-              ]
-              lower_routes = [r.lower() for r in routes]
-              for label, needles in required_route_groups:
-                  assert any(any(n in r for n in needles) for r in lower_routes), f'Missing route group: {label}'
-
-          print('Backend smoke test passed')
+          print('V3 backend and smart-feature smoke test passed')
           PY
