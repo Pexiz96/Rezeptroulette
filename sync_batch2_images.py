@@ -3,10 +3,27 @@ from __future__ import annotations
 from sqlalchemy import MetaData, Table, select, update
 
 
-def sync_batch2_recipe_images(engine) -> int:
-    """Update image paths of existing Batch-2 recipes to the paths in the seed file."""
-    from extra_recipes_batch2 import EXTRA_RECIPES_BATCH2
+BATCH2_IMAGE_PATHS = {
+    "Cremige Pilzpfanne mit Spätzle": "/generated-images/pilzspaetzle.jpg",
+    "Mediterrane Gemüse-Lasagne": "/generated-images/gemueselasagne.jpg",
+    "Knusprige Ofenkartoffeln mit Kräuterquark": "/generated-images/ofenkartoffeln_kraeuterquark.jpg",
+    "Gebratene Gnocchi mit Spinat und Tomaten": "/generated-images/gnocchi_spinat_tomaten.jpg",
+    "Apfel-Zimt-Porridge": "/generated-images/apfel_zimt_porridge.jpg",
+    "Couscous-Salat mit Feta": "/generated-images/couscous_salat_feta.jpg",
+    "Hähnchen-Gemüse-Wrap mit Joghurt-Dressing": "/generated-images/haehnchen_gemuese_wrap.jpg",
+    "Tomaten-Mozzarella-Pasta": "/generated-images/tomaten_mozzarella_pasta.jpg",
+    "Beeren-Pancakes mit Joghurt": "/generated-images/beeren_pancakes.jpg",
+    "Tomate-Mozzarella-Salat": "/generated-images/tomate_mozzarella_salat.jpg",
+    "Pilzrisotto": "/generated-images/pilzrisotto.jpg",
+    "Chili sin Carne": "/generated-images/chili_sin_carne.jpg",
+    "French Toast mit Beeren": "/generated-images/french_toast_beeren.jpg",
+    "Thunfisch-Nudel-Salat": "/generated-images/thunfisch_nudelsalat.jpg",
+    "Gemüseomelett": "/generated-images/gemueseomelett.jpg",
+}
 
+
+def sync_batch2_recipe_images(engine) -> int:
+    """Ensure every Batch-2 recipe uses a same-origin image URL."""
     metadata = MetaData()
     recipes = Table("recipes", metadata, autoload_with=engine)
     changed = 0
@@ -16,12 +33,8 @@ def sync_batch2_recipe_images(engine) -> int:
             row.name: row.bild
             for row in conn.execute(select(recipes.c.name, recipes.c.bild)).all()
         }
-        for recipe in EXTRA_RECIPES_BATCH2:
-            name = recipe.get("name")
-            image = recipe.get("bild")
-            if not name or not image or name not in existing:
-                continue
-            if existing[name] == image:
+        for name, image in BATCH2_IMAGE_PATHS.items():
+            if name not in existing or existing[name] == image:
                 continue
             conn.execute(
                 update(recipes)
