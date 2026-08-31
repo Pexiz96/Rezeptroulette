@@ -1,18 +1,25 @@
 {
   "name": "Rezeptroulette",
   "short_name": "Rezepte",
-  "description": "Rezepte entdecken, Wochen planen und Lebensmittel retten.",
+  "description": "Persönliche Rezeptideen, Wochenplanung, Vorräte und intelligente Einkaufsliste.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#f97316",
+  "orientation": "any",
+  "background_color": "#fff3e7",
+  "theme_color": "#ff6b35",
   "icons": [
     {
       "src": "/static/images/Rezeptroulette.png",
       "sizes": "any",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
+  ],
+  "shortcuts": [
+    {"name": "Roulette", "short_name": "Roulette", "url": "/?view=roulette"},
+    {"name": "Wochenplan", "short_name": "Plan", "url": "/?view=plan"},
+    {"name": "Einkaufsliste", "short_name": "Einkauf", "url": "/?view=shopping"},
+    {"name": "Food Rescue", "short_name": "Rescue", "url": "/?view=rescue"}
   ]
 }
