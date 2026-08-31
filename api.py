@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import io
 import re
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -8,6 +9,7 @@ from urllib.request import Request, urlopen
 from fastapi import HTTPException
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
+from PIL import Image
 
 from payload_loader import exec_gzip_base64_payload
 
@@ -17,19 +19,33 @@ exec_gzip_base64_payload(
     "api.py",
 )
 
-# Die bestehenden Rezeptbilder liegen historisch im Repository-Ordner
-# "bilder". V3 referenziert sie unter /bilder/<dateiname>. Den Ordner
-# deshalb zusätzlich als statische Route bereitstellen.
 _images_dir = Path(__file__).resolve().parent / "bilder"
 if _images_dir.is_dir() and not any(getattr(route, "path", None) == "/bilder" for route in app.routes):
     app.mount("/bilder", StaticFiles(directory=str(_images_dir)), name="bilder")
 
-# Neue kuratierte Rezeptbilder liegen teilweise als Base64-Text im Repository.
-# Für Batch 2 werden die Bilder über denselben lokalen Endpunkt ausgeliefert.
-# Dadurch lädt das Frontend ausschließlich same-origin URLs und ist nicht von
-# Hotlink-Sperren fremder Webseiten abhängig.
 _generated_image_dir = Path(__file__).resolve().parent / ".github" / "generated_images"
 _generated_name_re = re.compile(r"^[a-z0-9_\-]+\.jpg$")
+
+# Die 15 Bilder des zweiten Rezept-Batches liegen zusätzlich gemeinsam in
+# einem 5x3-Sprite. Dadurch sind wir für diese Rezepte nicht von externen
+# Bildservern abhängig. Jede Kachel wird serverseitig als eigenes JPEG geliefert.
+_BATCH2_SPRITE_TILES = {
+    "pilzspaetzle.jpg": 0,
+    "gemueselasagne.jpg": 1,
+    "ofenkartoffeln_kraeuterquark.jpg": 2,
+    "gnocchi_spinat_tomaten.jpg": 3,
+    "apfel_zimt_porridge.jpg": 4,
+    "couscous_salat_feta.jpg": 5,
+    "haehnchen_gemuese_wrap.jpg": 6,
+    "tomaten_mozzarella_pasta.jpg": 7,
+    "beeren_pancakes.jpg": 8,
+    "tomate_mozzarella_salat.jpg": 9,
+    "pilzrisotto.jpg": 10,
+    "chili_sin_carne.jpg": 11,
+    "french_toast_beeren.jpg": 12,
+    "thunfisch_nudelsalat.jpg": 13,
+    "gemueseomelett.jpg": 14,
+}
 
 _REMOTE_GENERATED_IMAGES = {
     "gemueselasagne.jpg": "https://itsonly.recipes/images/recipeimages/garden-veggie-lasagna.webp",
@@ -49,15 +65,51 @@ _REMOTE_GENERATED_IMAGES = {
 }
 
 
-@app.get("/generated-images/{filename}", include_in_schema=False)
-def generated_recipe_image(filename: str):
+def _decode_b64_file(path: Path) -> bytes:
+    return base64.b64decode("".join(path.read_text(encoding="ascii").split()), validate=True)
+
+
+def _batch2_sprite_image(filename: str) -> bytes | None:
+    index = _BATCH2_SPRITE_TILES.get(filename)
+    sprite_source = _generated_image_dir / "batch2_sprite.jpg.b64"
+    if index is None or not sprite_source.is_file():
+        return None
+
+    try:
+        sprite_bytes = _decode_b64_file(sprite_source)
+        with Image.open(io.BytesIO(sprite_bytes)) as sprite:
+            sprite = sprite.convert("RGB")
+            cols, rows = 5, 3
+            tile_w = sprite.width // cols
+            tile_h = sprite.height // rows
+            col = index % cols
+            row = index // cols
+            tile = sprite.crop((col * tile_w, row * tile_h, (col + 1) * tile_w, (row + 1) * tile_h))
+            out = io.BytesIO()
+            tile.save(out, format="JPEG", quality=90, optimize=True)
+            return out.getvalue()
+    except Exception:
+        return None
+
+
+def _serve_generated_image(filename: str) -> Response:
     if not _generated_name_re.fullmatch(filename):
         raise HTTPException(status_code=404, detail="Bild nicht gefunden")
+
+    # Batch 2 zuerst aus dem lokalen Sprite bedienen. So funktionieren alle
+    # 15 neuen Bilder unabhängig von Hotlink-Sperren oder fremden Servern.
+    sprite_payload = _batch2_sprite_image(filename)
+    if sprite_payload:
+        return Response(
+            content=sprite_payload,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        )
 
     source = _generated_image_dir / f"{filename}.b64"
     if source.is_file():
         try:
-            payload = base64.b64decode("".join(source.read_text(encoding="ascii").split()), validate=True)
+            payload = _decode_b64_file(source)
         except Exception as exc:
             raise HTTPException(status_code=500, detail="Bild konnte nicht geladen werden") from exc
         return Response(
@@ -91,3 +143,22 @@ def generated_recipe_image(filename: str):
         media_type=media_type,
         headers={"Cache-Control": "public, max-age=86400"},
     )
+
+
+@app.get("/generated-images/{filename}", include_in_schema=False)
+def generated_recipe_image(filename: str):
+    return _serve_generated_image(filename)
+
+
+# Das derzeit ausgelieferte Legacy-Frontend setzt vor lokale Bildpfade noch
+# /static/images/. Dadurch wird z.B. /generated-images/pilzspaetzle.jpg zu
+# /static/images//generated-images/pilzspaetzle.jpg. Diese Middleware fängt
+# beide Varianten serverseitig ab, auch wenn kein Service Worker aktiv ist.
+@app.middleware("http")
+async def repair_legacy_generated_image_paths(request, call_next):
+    path = request.url.path
+    marker = "generated-images/"
+    if path.startswith("/static/images//generated-images/") or path.startswith("/static/images/generated-images/"):
+        filename = path[path.index(marker) + len(marker):]
+        return _serve_generated_image(filename)
+    return await call_next(request)
