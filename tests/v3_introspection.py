@@ -5,15 +5,11 @@ sys.path.insert(0, str(ROOT))
 
 api_b64 = ''.join((ROOT / '.github/upgrade_payload/api.py.gz.b64').read_text().split())
 api_source = gzip.decompress(base64.b64decode(api_b64)).decode('utf-8')
-needles = [
-    'ALLERGENS','allergen_labels','allergens_for_recipe','merge_ingredients',
-    'normalize_food_name','recipe_is_safe','score_recipe','structured_ingredients',
-    'subtract_pantry','days_until'
-]
-print('API_USAGES')
-for idx, line in enumerate(api_source.splitlines(), 1):
-    if any(n in line for n in needles):
-        print(f'{idx:04d}: {line}')
+lines = api_source.splitlines()
+for start, end in [(300,365),(540,565),(650,745),(900,945),(1000,1070)]:
+    print(f'API_RANGE_{start}_{end}')
+    for idx in range(start, min(end, len(lines))+1):
+        print(f'{idx:04d}: {lines[idx-1]}')
 
 from database import Database
 import smart_features
@@ -22,18 +18,16 @@ for name in ['allergen_catalog','canonicalize_name','detect_allergens','aggregat
     obj = getattr(smart_features, name, None)
     print(name, inspect.signature(obj) if callable(obj) else repr(obj))
 
-print('CATALOG_SAMPLE')
+samples = ['1 kleine Zwiebel','1 Zwiebel','250 g Möhren','500 g Karotten','2 Frühlingszwiebeln']
+print('AGGREGATE_SAMPLE')
 try:
-    print(smart_features.allergen_catalog())
+    print(smart_features.aggregate_ingredients([(samples, 1.0)]))
 except Exception as exc:
     print(type(exc).__name__, str(exc))
-print('PARSE_SAMPLE')
-for sample in ['1 kleine Zwiebel','250 g Möhren','2 Frühlingszwiebeln']:
+print('CONFLICT_SAMPLES')
+recipe={'zutaten':['200 ml Milch','1 Ei','1 Zwiebel'],'tags':['Vegetarisch'],'kochzeit':20}
+for profile in [{},{'allergies':['milk']},{'diet':'vegan'},{'dietary':['vegan']},{'dislikes':['zwiebel']}]:
     try:
-        print(sample, '=>', smart_features.parse_ingredient(sample))
+        print(profile, '=>', smart_features.recipe_profile_conflicts(recipe, profile))
     except Exception as exc:
-        print(sample, type(exc).__name__, str(exc))
-
-print('DATABASE_METHODS')
-for name in sorted(n for n in dir(Database) if not n.startswith('_')):
-    print(name)
+        print(profile, type(exc).__name__, str(exc))
