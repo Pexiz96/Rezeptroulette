@@ -19,7 +19,7 @@ EXTRA_RECIPES_BATCH2 = [
     {
         "name": "Mediterrane Gemüse-Lasagne",
         "kueche": "Italienisch",
-        "bild": "/generated-images/gemueselasagne.jpg",
+        "bild": "https://itsonly.recipes/images/recipeimages/garden-veggie-lasagna.webp",
         "portionen": 4,
         "kochzeit": 65,
         "schwierigkeit": "Mittel",
@@ -31,7 +31,7 @@ EXTRA_RECIPES_BATCH2 = [
     {
         "name": "Knusprige Ofenkartoffeln mit Kräuterquark",
         "kueche": "Deutsch",
-        "bild": "/generated-images/ofenkartoffeln_kraeuterquark.jpg",
+        "bild": "https://vegnews.com/media/W1siZiIsIjU0MzM4L1VudGl0bGVkIGRlc2lnbiAtIDIwMjUtMDgtMjVUMTQ0NTU2LjE2Mi5wbmciXSxbInAiLCJjcm9wX3Jlc2l6ZWQiLCIxNTk5eDk0NSswKzAiLCIxNjAweDk0Nl4iLHsiZm9ybWF0IjoianBnIn1dLFsicCIsIm9wdGltaXplIl1d/Untitled%20design%20-%202025-08-25T144556.162.png?sha=90f99779aa88195b",
         "portionen": 4,
         "kochzeit": 45,
         "schwierigkeit": "Einfach",
@@ -43,7 +43,7 @@ EXTRA_RECIPES_BATCH2 = [
     {
         "name": "Gebratene Gnocchi mit Spinat und Tomaten",
         "kueche": "Italienisch",
-        "bild": "/generated-images/gnocchi_spinat_tomaten.jpg",
+        "bild": "https://img.chefkoch-cdn.de/rezepte/3508451522698641/bilder/1229293/crop-640x427/gnocchi-mit-spinat-und-tomaten.jpg",
         "portionen": 2,
         "kochzeit": 20,
         "schwierigkeit": "Einfach",
@@ -55,7 +55,7 @@ EXTRA_RECIPES_BATCH2 = [
     {
         "name": "Apfel-Zimt-Porridge",
         "kueche": "Frühstück",
-        "bild": "/generated-images/apfel_zimt_porridge.jpg",
+        "bild": "https://itsonly.recipes/images/recipeimages/apple-cinnamon-porridge.webp",
         "portionen": 2,
         "kochzeit": 15,
         "schwierigkeit": "Einfach",
@@ -67,7 +67,7 @@ EXTRA_RECIPES_BATCH2 = [
     {
         "name": "Couscous-Salat mit Feta",
         "kueche": "Mediterran",
-        "bild": "/generated-images/couscous_salat_feta.jpg",
+        "bild": "https://s7g10.scene7.com/is/image/aldi/202205050000",
         "portionen": 4,
         "kochzeit": 20,
         "schwierigkeit": "Einfach",
@@ -79,7 +79,7 @@ EXTRA_RECIPES_BATCH2 = [
     {
         "name": "Hähnchen-Gemüse-Wrap mit Joghurt-Dressing",
         "kueche": "Mexikanisch",
-        "bild": "/generated-images/haehnchen_gemuese_wrap.jpg",
+        "bild": "https://images.mrcook.app/recipe-image/0198ab6d-3e66-7afb-a3d0-2ef6fb0fd8c5?cacheKey=RnJpLCAxNSBBdWcgMjAyNSAwMTo1MjowMiBHTVQ%3D",
         "portionen": 4,
         "kochzeit": 25,
         "schwierigkeit": "Einfach",
@@ -91,7 +91,7 @@ EXTRA_RECIPES_BATCH2 = [
     {
         "name": "Tomaten-Mozzarella-Pasta",
         "kueche": "Italienisch",
-        "bild": "/generated-images/tomaten_mozzarella_pasta.jpg",
+        "bild": "https://cdn.gutekueche.de/media/recipe/69297/tomaten-mozzarella-sosse.jpg",
         "portionen": 4,
         "kochzeit": 25,
         "schwierigkeit": "Einfach",
@@ -103,7 +103,7 @@ EXTRA_RECIPES_BATCH2 = [
     {
         "name": "Beeren-Pancakes mit Joghurt",
         "kueche": "Frühstück",
-        "bild": "/generated-images/beeren_pancakes.jpg",
+        "bild": "https://itesco.cz/imgglobal/content_platform/recipes/main/67/6755f984a73bd34fff082dbc8f7490fe.jpg",
         "portionen": 2,
         "kochzeit": 25,
         "schwierigkeit": "Einfach",
@@ -115,7 +115,7 @@ EXTRA_RECIPES_BATCH2 = [
     {
         "name": "Tomate-Mozzarella-Salat",
         "kueche": "Italienisch",
-        "bild": "/generated-images/tomate_mozzarella_salat.jpg",
+        "bild": "https://api.bulmag.org/images/342b0fa92ab581373f0f8e4bf7e4afdf.jpeg",
         "portionen": 2,
         "kochzeit": 10,
         "schwierigkeit": "Einfach",
@@ -127,7 +127,7 @@ EXTRA_RECIPES_BATCH2 = [
     {
         "name": "Pilzrisotto",
         "kueche": "Italienisch",
-        "bild": "/generated-images/pilzrisotto.jpg",
+        "bild": "https://www.datocms-assets.com/20941/1756899974-mushroom-guide-mushroom-risotto.jpeg?auto=format&dpr=0.18&fit=max&w=4763",
         "portionen": 4,
         "kochzeit": 40,
         "schwierigkeit": "Mittel",
@@ -139,7 +139,7 @@ EXTRA_RECIPES_BATCH2 = [
     {
         "name": "Chili sin Carne",
         "kueche": "Mexikanisch",
-        "bild": "/generated-images/chili_sin_carne.jpg",
+        "bild": "https://i.pinimg.com/originals/4f/79/ec/4f79ec53a5031e02da786aff478ce9fd.jpg",
         "portionen": 4,
         "kochzeit": 35,
         "schwierigkeit": "Einfach",
@@ -151,7 +151,7 @@ EXTRA_RECIPES_BATCH2 = [
     {
         "name": "French Toast mit Beeren",
         "kueche": "Frühstück",
-        "bild": "/generated-images/french_toast_beeren.jpg",
+        "bild": "https://food.fnr.sndimg.com/content/dam/images/food/fullset/2013/12/9/0/FNK_French-Toast-with-Mixed-Berries_s4x3.jpg.rend.hgtvcom.1280.960.suffix/1387416657918.webp",
         "portionen": 2,
         "kochzeit": 20,
         "schwierigkeit": "Einfach",
@@ -163,7 +163,7 @@ EXTRA_RECIPES_BATCH2 = [
     {
         "name": "Thunfisch-Nudel-Salat",
         "kueche": "Salat",
-        "bild": "/generated-images/thunfisch_nudelsalat.jpg",
+        "bild": "https://ip.index.hr/remote/bucket.index.hr/b/index/2a3127a4-c4b0-4c39-9bbd-ab23dff50802.jpg?width=500",
         "portionen": 4,
         "kochzeit": 25,
         "schwierigkeit": "Einfach",
@@ -175,7 +175,7 @@ EXTRA_RECIPES_BATCH2 = [
     {
         "name": "Gemüseomelett",
         "kueche": "Frühstück",
-        "bild": "/generated-images/gemueseomelett.jpg",
+        "bild": "https://www.gutekueche.at/storage/media/recipe/166532/gemueseomelette.jpg",
         "portionen": 2,
         "kochzeit": 20,
         "schwierigkeit": "Einfach",
