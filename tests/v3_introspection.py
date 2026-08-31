@@ -1,16 +1,17 @@
 from pathlib import Path
-import sys, json
+import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import api
 
-spec = api.app.openapi()
-print('MODELS')
-for name, schema in sorted(spec.get('components', {}).get('schemas', {}).items()):
-    if any(k in name.lower() for k in ['household','profile','register','login','pantry','recipe','rating','items']):
-        print(name, json.dumps(schema, ensure_ascii=False, sort_keys=True))
+print('ROUTES_AND_MOUNTS')
+for route in api.app.routes:
+    print(type(route).__name__, getattr(route, 'path', ''), getattr(route, 'name', ''))
 
-print('ROUTES')
-for path, methods in spec.get('paths', {}).items():
-    if any(k in path for k in ['/auth','/household','/favorites','/ratings','/eaten','/rezepte/{recipe_id}/scale']):
-        print(path, json.dumps(methods, ensure_ascii=False, sort_keys=True))
+print('SAMPLE_RECIPES')
+try:
+    rows = api.db.all_recipes(None)
+    for row in rows[:10]:
+        print(row.get('id'), row.get('name'), 'bild=', repr(row.get('bild')), 'image=', repr(row.get('image')), 'image_url=', repr(row.get('image_url')))
+except Exception as exc:
+    print(type(exc).__name__, str(exc))
