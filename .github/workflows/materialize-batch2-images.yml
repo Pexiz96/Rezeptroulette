@@ -37,9 +37,11 @@ jobs:
           from pathlib import Path
 
           import requests
-          from PIL import Image
+          from PIL import Image, ImageFile
 
           from extra_recipes_batch2 import EXTRA_RECIPES_BATCH2
+
+          ImageFile.LOAD_TRUNCATED_IMAGES = True
 
           root = Path('.')
           out_dir = root / 'bilder' / 'curated'
