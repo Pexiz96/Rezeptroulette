@@ -22,72 +22,90 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Decode and compile upgrade payloads
+      - name: Compile Python and generated payloads
         run: |
+          python -m py_compile api.py database.py payload_loader.py smart_features.py
           python - <<'PY'
           import base64, gzip
           from pathlib import Path
+          root=Path('.')
+          api_b64=''.join((root/'.github/upgrade_payload/api.py.gz.b64').read_text().split())
+          db_b64=''.join(''.join((root/f'.github/upgrade_payload/database.{i:02d}').read_text().split()) for i in range(4))
+          compile(gzip.decompress(base64.b64decode(api_b64,validate=True)).decode(),'api-payload.py','exec')
+          compile(gzip.decompress(base64.b64decode(db_b64,validate=True)).decode(),'database-payload.py','exec')
+          PY
 
-          root = Path('.')
-          api_b64 = ''.join((root / '.github/upgrade_payload/api.py.gz.b64').read_text().split())
-          db_b64 = ''.join(
-              ''.join((root / f'.github/upgrade_payload/database.{i:02d}').read_text().split())
-              for i in range(4)
-          )
-          api_source = gzip.decompress(base64.b64decode(api_b64, validate=True)).decode('utf-8')
-          db_source = gzip.decompress(base64.b64decode(db_b64, validate=True)).decode('utf-8')
-          compile(api_source, 'api.py', 'exec')
-          compile(db_source, 'database.py', 'exec')
-          compile(Path('smart_features.py').read_text(), 'smart_features.py', 'exec')
-          print(f'api.py payload: {len(api_source)} chars')
-          print(f'database.py payload: {len(db_source)} chars')
+      - name: Check frontend JavaScript
+        run: node --check static/v3.js
+
+      - name: Validate PWA files
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          manifest=json.loads(Path('static/manifest.json').read_text())
+          assert manifest['display']=='standalone'
+          assert manifest['theme_color']=='#ff6b35'
+          html=Path('static/index-v3.html').read_text()
+          assert '/static/v3.css' in html and '/static/v3.js' in html
+          sw=Path('static/service-worker.js').read_text()
+          assert '/profile/' in sw and '/household' in sw and '/einkaufsliste' in sw
           PY
 
       - name: Install dependencies
         run: pip install -r requirements.txt httpx2
 
-      - name: Backend and smart-feature smoke test
+      - name: Backend, account and smart-feature tests
         env:
           DATABASE_URL: sqlite:////tmp/rezeptroulette-ci.sqlite3
           ENABLE_API_DOCS: 'true'
         run: |
           python - <<'PY'
           from pathlib import Path
-
-          db_file = Path('/tmp/rezeptroulette-ci.sqlite3')
-          if db_file.exists():
-              db_file.unlink()
+          db_file=Path('/tmp/rezeptroulette-ci.sqlite3')
+          if db_file.exists(): db_file.unlink()
 
           from smart_features import merge_ingredients, recipe_is_safe, parse_ingredient
-          merged = merge_ingredients([
-              {'portionen': 2, 'zutaten': ['1 kleine Zwiebel', '250 g Möhren']},
-              {'portionen': 2, 'zutaten': ['1 Zwiebel', '500 g Karotten', '2 Frühlingszwiebeln']},
+          merged=merge_ingredients([
+              {'portionen':2,'zutaten':['1 kleine Zwiebel','250 g Möhren']},
+              {'portionen':2,'zutaten':['1 Zwiebel','500 g Karotten','2 Frühlingszwiebeln']},
           ])
-          by_food = {row['food']: row for row in merged}
-          assert by_food['zwiebel']['display'] == '2 Zwiebeln', by_food
-          assert by_food['karotte']['display'] == '750 g Karotten', by_food
-          assert 'frühlingszwiebel' in by_food and by_food['frühlingszwiebel']['display'] == '2 Frühlingszwiebeln', by_food
-          assert parse_ingredient('1 kleine Zwiebel')['food'] == 'zwiebel'
-          safe, conflicts = recipe_is_safe({'zutaten': ['200 ml Milch']}, {'allergies': ['milk']})
-          assert safe is False and 'milk' in conflicts['allergy_conflicts'], conflicts
+          by_food={row['food']:row for row in merged}
+          assert by_food['zwiebel']['display']=='2 Zwiebeln',by_food
+          assert by_food['karotte']['display']=='750 g Karotten',by_food
+          assert by_food['frühlingszwiebel']['display']=='2 Frühlingszwiebeln',by_food
+          assert parse_ingredient('1 kleine Zwiebel')['food']=='zwiebel'
+          safe,conflicts=recipe_is_safe({'zutaten':['200 ml Milch']},{'allergies':['milk']})
+          assert safe is False and 'milk' in conflicts['allergy_conflicts']
 
           import api
           from fastapi.testclient import TestClient
-
           with TestClient(api.app) as client:
-              response = client.get('/health')
-              assert response.status_code == 200, response.text
-              payload = response.json()
-              assert payload.get('ok') is True and payload.get('version') == '3.0.0', payload
+              health=client.get('/health')
+              assert health.status_code==200 and health.json().get('version')=='3.0.0',health.text
+              root=client.get('/')
+              assert root.status_code==200 and 'v3.js' in root.text and 'Rezeptroulette' in root.text
 
-              routes = {getattr(route, 'path', '') for route in api.app.routes}
-              required = {
-                  '/profile/food', '/pantry-v2', '/food-rescue', '/roulette',
-                  '/wochenplan', '/wochenplan/auto', '/einkaufsliste',
-                  '/household', '/auth/sessions', '/auth/export',
-              }
-              missing = sorted(required - routes)
-              assert not missing, f'Missing V3 routes: {missing}'
+              routes={getattr(route,'path','') for route in api.app.routes}
+              required={'/profile/food','/pantry-v2','/food-rescue','/roulette','/wochenplan','/wochenplan/auto','/einkaufsliste','/household','/auth/sessions','/auth/export','/recipe-notes/{recipe_id}','/rezepte/{recipe_id}/scale'}
+              assert not (required-routes),f'Missing V3 routes: {sorted(required-routes)}'
 
-          print('V3 backend and smart-feature smoke test passed')
+              reg=client.post('/auth/register',json={'username':'ci_user','email':'ci@example.test','password':'Testpass123!','display_name':'CI User'})
+              assert reg.status_code==200,reg.text
+              profile=client.put('/profile/food',json={'allergies':['milk'],'intolerances':['gluten'],'diets':[],'dislikes':['pilz'],'favorite_ingredients':['kartoffel']})
+              assert profile.status_code==200,profile.text
+              saved=client.get('/profile/food')
+              assert saved.status_code==200 and 'milk' in saved.json()['profile']['allergies'],saved.text
+              pantry=client.put('/pantry-v2',json={'items':[{'name':'Zwiebeln','amount':2,'unit':'Stück','storage':'Vorrat','expires_at':'','opened':False}]})
+              assert pantry.status_code==200,pantry.text
+              pantry_get=client.get('/pantry-v2')
+              assert pantry_get.status_code==200 and pantry_get.json()['items'],pantry_get.text
+              house=client.post('/household',json={'name':'CI Haushalt'})
+              assert house.status_code==200,house.text
+              auto=client.post('/wochenplan/auto?scope=household')
+              assert auto.status_code==200,auto.text
+              shop=client.get('/einkaufsliste?scope=household')
+              assert shop.status_code==200 and 'items' in shop.json(),shop.text
+
+          print('V3 verification passed')
           PY
