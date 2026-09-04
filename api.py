@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 from fastapi import HTTPException
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
@@ -19,16 +19,18 @@ exec_gzip_base64_payload(
     "api.py",
 )
 
-_images_dir = Path(__file__).resolve().parent / "bilder"
+_base_dir = Path(__file__).resolve().parent
+_images_dir = _base_dir / "bilder"
+_static_images_dir = _base_dir / "static" / "images"
 if _images_dir.is_dir() and not any(getattr(route, "path", None) == "/bilder" for route in app.routes):
     app.mount("/bilder", StaticFiles(directory=str(_images_dir)), name="bilder")
 
-_generated_image_dir = Path(__file__).resolve().parent / ".github" / "generated_images"
+_generated_image_dir = _base_dir / ".github" / "generated_images"
 _generated_name_re = re.compile(r"^[a-z0-9_\-]+\.jpg$")
+_safe_filename_re = re.compile(r"^[^/\\]+$")
 
 # Die 15 Bilder des zweiten Rezept-Batches liegen zusätzlich gemeinsam in
-# einem 5x3-Sprite. Dadurch sind wir für diese Rezepte nicht von externen
-# Bildservern abhängig. Jede Kachel wird serverseitig als eigenes JPEG geliefert.
+# einem 5x3-Sprite. Einzeldateien haben Vorrang; das Sprite bleibt als Fallback.
 _BATCH2_SPRITE_TILES = {
     "pilzspaetzle.jpg": 0,
     "gemueselasagne.jpg": 1,
@@ -86,7 +88,7 @@ def _batch2_sprite_image(filename: str) -> bytes | None:
             row = index // cols
             tile = sprite.crop((col * tile_w, row * tile_h, (col + 1) * tile_w, (row + 1) * tile_h))
             out = io.BytesIO()
-            tile.save(out, format="JPEG", quality=90, optimize=True)
+            tile.save(out, format="JPEG", quality=92, optimize=True)
             return out.getvalue()
     except Exception:
         return None
@@ -96,40 +98,29 @@ def _serve_generated_image(filename: str) -> Response:
     if not _generated_name_re.fullmatch(filename):
         raise HTTPException(status_code=404, detail="Bild nicht gefunden")
 
-    # Batch 2 zuerst aus dem lokalen Sprite bedienen. So funktionieren alle
-    # 15 neuen Bilder unabhängig von Hotlink-Sperren oder fremden Servern.
-    sprite_payload = _batch2_sprite_image(filename)
-    if sprite_payload:
-        return Response(
-            content=sprite_payload,
-            media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=31536000, immutable"},
-        )
-
+    # Eine eigene Datei ist immer die beste Quelle und hat Vorrang vor dem
+    # komprimierten Sprite. Dadurch können hochwertige Bilder einzeln ersetzt werden.
     source = _generated_image_dir / f"{filename}.b64"
     if source.is_file():
         try:
             payload = _decode_b64_file(source)
         except Exception as exc:
             raise HTTPException(status_code=500, detail="Bild konnte nicht geladen werden") from exc
-        return Response(
-            content=payload,
-            media_type="image/jpeg",
-            headers={"Cache-Control": "public, max-age=31536000, immutable"},
-        )
+        return Response(content=payload, media_type="image/jpeg", headers={"Cache-Control": "no-cache"})
+
+    sprite_payload = _batch2_sprite_image(filename)
+    if sprite_payload:
+        return Response(content=sprite_payload, media_type="image/jpeg", headers={"Cache-Control": "no-cache"})
 
     remote_url = _REMOTE_GENERATED_IMAGES.get(filename)
     if not remote_url:
         raise HTTPException(status_code=404, detail="Bild nicht gefunden")
 
     try:
-        request = Request(
-            remote_url,
-            headers={
-                "User-Agent": "Mozilla/5.0 Rezeptroulette/3.0",
-                "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-            },
-        )
+        request = Request(remote_url, headers={
+            "User-Agent": "Mozilla/5.0 Rezeptroulette/3.0",
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        })
         with urlopen(request, timeout=10) as remote:
             payload = remote.read(8 * 1024 * 1024)
             media_type = remote.headers.get_content_type() or "image/jpeg"
@@ -138,11 +129,7 @@ def _serve_generated_image(filename: str) -> Response:
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Rezeptbild konnte nicht geladen werden") from exc
 
-    return Response(
-        content=payload,
-        media_type=media_type,
-        headers={"Cache-Control": "public, max-age=86400"},
-    )
+    return Response(content=payload, media_type=media_type, headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/generated-images/{filename}", include_in_schema=False)
@@ -150,15 +137,32 @@ def generated_recipe_image(filename: str):
     return _serve_generated_image(filename)
 
 
-# Das derzeit ausgelieferte Legacy-Frontend setzt vor lokale Bildpfade noch
-# /static/images/. Dadurch wird z.B. /generated-images/pilzspaetzle.jpg zu
-# /static/images//generated-images/pilzspaetzle.jpg. Diese Middleware fängt
-# beide Varianten serverseitig ab, auch wenn kein Service Worker aktiv ist.
+# Das alte Frontend setzt bei allen lokalen Bildern pauschal /static/images/
+# davor. Hier korrigieren wir die historischen Sonderfälle serverseitig, damit
+# die Bilder auch ohne installierten Service Worker funktionieren.
 @app.middleware("http")
-async def repair_legacy_generated_image_paths(request, call_next):
+async def repair_legacy_recipe_image_paths(request, call_next):
     path = request.url.path
+
     marker = "generated-images/"
     if path.startswith("/static/images//generated-images/") or path.startswith("/static/images/generated-images/"):
         filename = path[path.index(marker) + len(marker):]
-        return _serve_generated_image(filename)
+        if _generated_name_re.fullmatch(filename):
+            return _serve_generated_image(filename)
+
+    if path.startswith("/static/images/"):
+        filename = path[len("/static/images/"):].lstrip("/")
+
+        # Manche Datensätze enthalten bereits 'bilder/' im Feld, andere nur
+        # den pdf_*.png-Dateinamen. Beide Varianten liegen physisch in /bilder.
+        if filename.startswith("bilder/"):
+            filename = filename[len("bilder/"):]
+
+        if _safe_filename_re.fullmatch(filename):
+            static_candidate = _static_images_dir / filename
+            if not static_candidate.is_file():
+                legacy_candidate = _images_dir / filename
+                if legacy_candidate.is_file():
+                    return FileResponse(legacy_candidate, headers={"Cache-Control": "no-cache"})
+
     return await call_next(request)
