@@ -1,4 +1,4 @@
-const CACHE="rezeptroulette-v3-2";
+const CACHE="rezeptroulette-v3-3";
 const SHELL=[
   "/",
   "/static/index-v3.html",
@@ -30,26 +30,45 @@ self.addEventListener("fetch",event=>{
   const url=new URL(request.url);
   if(url.origin!==self.location.origin)return;
 
-  // Compatibility fix for the legacy frontend: imageUrl() currently prefixes
-  // every non-http image with /static/images/. New curated recipes already use
-  // /generated-images/<file>.jpg, which otherwise becomes the invalid path
-  // /static/images//generated-images/<file>.jpg. Rewrite that request to the
-  // real FastAPI image endpoint until the legacy frontend is retired.
+  // Legacy frontend compatibility: generated recipe images already carry a
+  // root-relative URL, but older UI code prefixes /static/images/ again.
   if(
     url.pathname.startsWith("/static/images//generated-images/") ||
     url.pathname.startsWith("/static/images/generated-images/")
   ){
     const marker="generated-images/";
     const filename=url.pathname.slice(url.pathname.indexOf(marker)+marker.length);
-    const corrected=new URL(`/generated-images/${filename}`,self.location.origin);
-    event.respondWith(fetch(corrected.toString(),{credentials:"same-origin"}));
+    event.respondWith(fetch(`/generated-images/${filename}`,{credentials:"same-origin",cache:"no-store"}));
     return;
   }
 
-  // Personalized/account data is deliberately never cached. This prevents one
-  // user's allergies, pantry, household or account data from being served stale
-  // or exposed to a later session in the same browser cache.
+  // Imported PDF recipes historically live in /bilder while the legacy UI
+  // requests their bare filename below /static/images. Route those requests to
+  // the real repository location instead of returning a broken image.
+  if(url.pathname.startsWith("/static/images/")){
+    let filename=url.pathname.slice("/static/images/".length).replace(/^\/+/,"");
+
+    if(filename.startsWith("bilder/")){
+      filename=filename.slice("bilder/".length);
+      event.respondWith(fetch(`/bilder/${filename}`,{credentials:"same-origin",cache:"no-store"}));
+      return;
+    }
+
+    if(filename.startsWith("pdf_")){
+      event.respondWith(fetch(`/bilder/${filename}`,{credentials:"same-origin",cache:"no-store"}));
+      return;
+    }
+  }
+
+  // Personalized/account data is deliberately never cached.
   if(PRIVATE_PREFIXES.some(prefix=>url.pathname.startsWith(prefix)))return;
+
+  // Recipe image requests should prefer the network so replaced higher-quality
+  // images become visible immediately after a deployment.
+  if(url.pathname.startsWith("/generated-images/")||url.pathname.startsWith("/bilder/")){
+    event.respondWith(fetch(request,{cache:"no-store"}).catch(()=>caches.match(request)));
+    return;
+  }
 
   if(url.pathname.startsWith("/static/")){
     event.respondWith(
