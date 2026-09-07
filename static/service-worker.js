@@ -1,9 +1,10 @@
-const CACHE="rezeptroulette-v3-3";
+const CACHE="rezeptroulette-v3-4";
 const SHELL=[
   "/",
   "/static/index-v3.html",
   "/static/v3.css",
   "/static/v3.js",
+  "/static/nutrition.js",
   "/static/manifest.json",
   "/static/images/Rezeptroulette.png"
 ];
@@ -30,8 +31,6 @@ self.addEventListener("fetch",event=>{
   const url=new URL(request.url);
   if(url.origin!==self.location.origin)return;
 
-  // Legacy frontend compatibility: generated recipe images already carry a
-  // root-relative URL, but older UI code prefixes /static/images/ again.
   if(
     url.pathname.startsWith("/static/images//generated-images/") ||
     url.pathname.startsWith("/static/images/generated-images/")
@@ -42,9 +41,6 @@ self.addEventListener("fetch",event=>{
     return;
   }
 
-  // Imported PDF recipes historically live in /bilder while the legacy UI
-  // requests their bare filename below /static/images. Route those requests to
-  // the real repository location instead of returning a broken image.
   if(url.pathname.startsWith("/static/images/")){
     let filename=url.pathname.slice("/static/images/".length).replace(/^\/+/,"");
 
@@ -60,11 +56,8 @@ self.addEventListener("fetch",event=>{
     }
   }
 
-  // Personalized/account data is deliberately never cached.
   if(PRIVATE_PREFIXES.some(prefix=>url.pathname.startsWith(prefix)))return;
 
-  // Recipe image requests should prefer the network so replaced higher-quality
-  // images become visible immediately after a deployment.
   if(url.pathname.startsWith("/generated-images/")||url.pathname.startsWith("/bilder/")){
     event.respondWith(fetch(request,{cache:"no-store"}).catch(()=>caches.match(request)));
     return;
