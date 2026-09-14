@@ -1,10 +1,9 @@
-const CACHE="rezeptroulette-v3-4";
+const CACHE="rezeptroulette-v3-5";
 const SHELL=[
   "/",
   "/static/index-v3.html",
   "/static/v3.css",
   "/static/v3.js",
-  "/static/nutrition.js",
   "/static/manifest.json",
   "/static/images/Rezeptroulette.png"
 ];
@@ -43,13 +42,11 @@ self.addEventListener("fetch",event=>{
 
   if(url.pathname.startsWith("/static/images/")){
     let filename=url.pathname.slice("/static/images/".length).replace(/^\/+/,"");
-
     if(filename.startsWith("bilder/")){
       filename=filename.slice("bilder/".length);
       event.respondWith(fetch(`/bilder/${filename}`,{credentials:"same-origin",cache:"no-store"}));
       return;
     }
-
     if(filename.startsWith("pdf_")){
       event.respondWith(fetch(`/bilder/${filename}`,{credentials:"same-origin",cache:"no-store"}));
       return;
